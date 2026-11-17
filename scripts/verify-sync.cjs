@@ -41,6 +41,8 @@ async function handle(route, device) {
   if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
   const body = req.postData() ? JSON.parse(req.postData()) : null;
 
+  if (url.pathname === '/auth/v1/settings') return json(200, { external: { email: true, google: server.google === true } });
+  if (url.pathname === '/auth/v1/authorize') return route.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: '<title>provider</title>' });
   if (url.pathname === '/auth/v1/signup') {
     const id = `00000000-0000-4000-8000-${String(server.users.size + 1).padStart(12, '0')}`;
     server.users.set(body.email, { id, email: body.email, password: body.password, confirmed: false });
@@ -269,6 +271,21 @@ async function setBalance(page, name, balance) {
   await until(async () => (await stranger.locator('.setting').first().innerText()).includes('Signed in as other@example.com'));
   await go(stranger, '#/');
   check('another account sees none of this data', (await netWorth(stranger)) === '$1,086,650' && (await stored(stranger)).isExample === true);
+
+  // Google sign-in is offered only when the sync service has it switched on
+  check('no Google button while Google sign-in is off', (await laptop.getByRole('button', { name: 'Continue with Google' }).count()) === 0);
+  server.google = true;
+  const visitor = await device(browser, 'visitor', 390, 844);
+  await go(visitor, '#/settings');
+  check('Google button appears once Google sign-in is on', await until(() => visitor.getByRole('button', { name: 'Continue with Google' }).isVisible()));
+  await runAudit(visitor, 'sign-in with Google option @390');
+  await visitor.screenshot({ path: path.join(OUT, 'sync-sign-in-390.png') });
+  const [request] = await Promise.all([
+    visitor.waitForRequest((r) => r.url().includes('/auth/v1/authorize')),
+    visitor.getByRole('button', { name: 'Continue with Google' }).click(),
+  ]);
+  const target = new URL(request.url());
+  check('the button starts Google sign-in and returns to this app', target.searchParams.get('provider') === 'google' && target.searchParams.get('redirect_to') === BASE, request.url().slice(0, 140));
 
   await browser.close();
   console.log(failed === 0 ? '\nAll sync checks passed.' : `\n${failed} sync check(s) FAILED.`);

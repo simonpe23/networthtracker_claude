@@ -28,6 +28,7 @@ interface Sync {
   meta: SyncMeta;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  signInWithGoogle: () => Promise<string | null>;
   signOut: () => Promise<void>;
   syncNow: () => void;
 }
@@ -284,6 +285,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           options: { emailRedirectTo: window.location.origin + window.location.pathname },
         });
         return { error: error ? friendly(error.message) : null, needsConfirmation: !error && !d.session };
+      },
+      signInWithGoogle: async () => {
+        const { error } = await supabase!.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin + window.location.pathname },
+        });
+        return error ? friendly(error.message) : null;
       },
       signOut: async () => {
         clearTimeout(timer.current);

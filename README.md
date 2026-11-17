@@ -67,6 +67,7 @@ Optional. In Settings, create an account with an email and password, confirm the
 - Each save carries a revision number. If two devices changed the data since they last agreed, the app asks which copy to keep. It never overwrites one silently.
 - Offline changes stay on the device and sync when the connection returns.
 - Signing out keeps the data on the device and stops syncing.
+- A **Continue with Google** button appears automatically once Google is enabled as a sign-in provider in the Supabase project.
 - There is no password reset inside the app yet. Reset a password from the Supabase dashboard under Authentication, Users.
 
 The sync service is a Supabase project. Its address and publishable key are in `.env`; both are public by design. The table definition and access rules are in `supabase/schema.sql`: one row per user, and a user can only read or write their own row. Delete the two lines in `.env` to run the app with no sync at all.

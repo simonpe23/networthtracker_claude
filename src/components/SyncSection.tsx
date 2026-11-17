@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fmtDateTime } from '../lib/format';
+import { enabledProviders } from '../lib/supabase';
 import { useSync } from '../sync';
 import { TextField } from './ui';
 
@@ -11,6 +12,16 @@ export function SyncSection() {
   const [info, setInfo] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [google, setGoogle] = useState(false);
+
+  // The Google button appears only once Google sign-in is switched on for the sync service.
+  useEffect(() => {
+    let live = true;
+    void enabledProviders().then((p) => live && setGoogle(p.google));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const emailError = /^\S+@\S+\.\S+$/.test(email.trim()) ? null : 'Enter your email address.';
   const passwordError = password.length >= 8 ? null : 'Enter a password of at least 8 characters.';
@@ -80,6 +91,22 @@ export function SyncSection() {
           Sign in to see the same portfolio on your phone and computer. Your data is then stored in your account as well as on this device.
           Without signing in, it stays on this device only.
         </p>
+        {google && (
+          <div className="sso">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={working}
+              onClick={() => {
+                setError(null);
+                void sync.signInWithGoogle().then(setError);
+              }}
+            >
+              Continue with Google
+            </button>
+            <p className="hint">No password or confirmation email needed. Or use an email and password below.</p>
+          </div>
+        )}
         <TextField label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} error={submitted ? emailError : null} />
         <TextField
           label="Password"
