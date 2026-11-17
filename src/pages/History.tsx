@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Snapshot } from '../types';
+import { adjustSnapshot, makeExclusion, snapshotHoldingExcluded, type Exclusion } from '../lib/exclude';
 import { fmtDate, fmtDateTime, pct } from '../lib/format';
+import { useHiddenCategories } from '../lib/hidden';
 import { useStore } from '../state';
 import { deletedLabel, HoldingCharts, METRIC_LABEL, PortfolioChart, useRange, type Metric } from '../components/charts';
 import { Select } from '../components/Select';
@@ -8,7 +10,7 @@ import { Confirm } from '../components/ui';
 
 const PORTFOLIO = '__portfolio__';
 
-function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
+function SnapshotDetail({ snapshot, ex }: { snapshot: Snapshot; ex: Exclusion }) {
   const { fmt } = useStore();
   if (!snapshot.holdings) {
     return <p className="panel">This older snapshot recorded totals only. No holdings were saved with it, so none are shown.</p>;
@@ -28,7 +30,7 @@ function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
         </thead>
         <tbody>
           {rows.map((h) => (
-            <tr key={h.holdingId}>
+            <tr key={h.holdingId} className={snapshotHoldingExcluded(h, ex) ? 'is-left-out' : undefined}>
               <th scope="row" className="m-name">
                 {h.name}
                 {h.institution && <span className="muted"> ({h.institution})</span>}
@@ -44,8 +46,19 @@ function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
+/** Quiet reminder that the figures follow the In net worth checkboxes on the Holdings page. */
+function SnapshotNote() {
+  const { data } = useStore();
+  const [hidden] = useHiddenCategories();
+  const ex = makeExclusion(data, hidden);
+  if (!ex.active || data.snapshots.length === 0) return null;
+  return <p className="hint">Totals exclude {ex.label}, as on the Holdings page. Each snapshot keeps every holding it saved.</p>;
+}
+
 function SnapshotList() {
   const { data, dispatch, fmt, notify } = useStore();
+  const [hidden] = useHiddenCategories();
+  const ex = makeExclusion(data, hidden);
   const [open, setOpen] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Snapshot | null>(null);
   const snapshots = [...data.snapshots].reverse();
@@ -70,11 +83,12 @@ function SnapshotList() {
           {snapshots.flatMap((s) => {
             const isOpen = open === s.id;
             const when = fmtDateTime(s.takenAt);
+            const shown = adjustSnapshot(s, ex) ?? s;
             return [
               <tr key={s.id} className={isOpen ? 'is-open' : undefined}>
                 <th scope="row">{when}</th>
-                <td className="num strong" data-label="Net worth">{fmt.money(s.netWorth)}</td>
-                <td className="num" data-label="Total assets">{opt(s.totalAssets)}</td>
+                <td className="num strong" data-label="Net worth">{fmt.money(shown.netWorth)}</td>
+                <td className="num" data-label="Total assets">{opt(shown.totalAssets)}</td>
                 <td className="num" data-label="Total debts">{opt(s.totalDebts)}</td>
                 <td className="row-actions">
                   <button type="button" className="link" aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'View'} holdings in snapshot of ${when}`} onClick={() => setOpen(isOpen ? null : s.id)}>
@@ -85,7 +99,7 @@ function SnapshotList() {
               </tr>,
               isOpen && (
                 <tr key={`${s.id}-detail`} className="detail-row">
-                  <td colSpan={5}><SnapshotDetail snapshot={s} /></td>
+                  <td colSpan={5}><SnapshotDetail snapshot={s} ex={ex} /></td>
                 </tr>
               ),
             ];
@@ -193,6 +207,7 @@ export function HistoryPage({ holdingId }: { holdingId: string | null }) {
             <PortfolioChart metric={metric} range={range} onRange={setRange} />
           )}
           <h2 className="sub-heading list-heading">Saved snapshots</h2>
+          <SnapshotNote />
           <SnapshotList />
         </>
       ) : (

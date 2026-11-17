@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { AppData } from '../types';
+import { round2 } from '../lib/calc';
+import { adjustSnapshot, dailyExcluder, makeExclusion, type Exclusion } from '../lib/exclude';
 import { fmtDate, parseLocalDate, pct } from '../lib/format';
+import { useHiddenCategories } from '../lib/hidden';
 import { holdingSeries } from '../lib/store';
 import { useStore } from '../state';
 import { ChartLegend, LineChart, type ChartPoint } from './LineChart';
@@ -11,11 +14,18 @@ export const METRIC_LABEL: Record<Metric, string> = { netWorth: 'Net worth', tot
 
 const noon = (date: string) => parseLocalDate(date).getTime();
 
-export function portfolioSeries(data: AppData, metric: Metric): { line: ChartPoint[]; dots: ChartPoint[] } {
+export function portfolioSeries(data: AppData, metric: Metric, ex?: Exclusion): { line: ChartPoint[]; dots: ChartPoint[] } {
+  const exclusion = ex ?? makeExclusion(data, new Set());
+  const minus = metric === 'totalDebts' ? () => 0 : dailyExcluder(data, exclusion);
   return {
-    line: data.daily.map((d) => ({ t: noon(d.date), v: d[metric] })),
-    // Older total-only snapshots may lack assets or debts. Those are left out, not estimated.
-    dots: data.snapshots.flatMap((s) => (s[metric] === null ? [] : [{ t: new Date(s.takenAt).getTime(), v: s[metric] as number }])),
+    line: data.daily.map((d) => ({ t: noon(d.date), v: round2(d[metric] - minus(d)) })),
+    // Older total-only snapshots may lack assets or debts, and cannot be split by category.
+    // Those are left out, not estimated.
+    dots: data.snapshots.flatMap((s) => {
+      const a = adjustSnapshot(s, exclusion);
+      const v = a?.[metric];
+      return v === null || v === undefined ? [] : [{ t: new Date(s.takenAt).getTime(), v }];
+    }),
   };
 }
 
@@ -23,7 +33,7 @@ export function useRange(initial: Range = defaultRange()) {
   return useState<Range>(initial);
 }
 
-function Block(props: { title?: string; label: string; line: ChartPoint[]; dots: ChartPoint[]; range: Range; money: boolean }) {
+function Block(props: { title?: string; label: string; line: ChartPoint[]; dots: ChartPoint[]; range: Range; money: boolean; note?: string }) {
   const { fmt } = useStore();
   const line = inRange(props.line, props.range);
   const dots = inRange(props.dots, props.range);
@@ -31,7 +41,10 @@ function Block(props: { title?: string; label: string; line: ChartPoint[]; dots:
     <div className="chart-block">
       {props.title && <h3 className="sub-heading">{props.title}</h3>}
       <div className="chart-meta">
-        <p className="muted">{spanText([...line, ...dots])}</p>
+        <p className="muted">
+          {spanText([...line, ...dots])}
+          {props.note && `. ${props.note}`}
+        </p>
         <ChartLegend />
       </div>
       <LineChart
@@ -47,11 +60,14 @@ function Block(props: { title?: string; label: string; line: ChartPoint[]; dots:
 
 export function PortfolioChart({ metric, range, onRange }: { metric: Metric; range: Range; onRange: (r: Range) => void }) {
   const { data } = useStore();
-  const series = useMemo(() => portfolioSeries(data, metric), [data, metric]);
+  const [hidden] = useHiddenCategories();
+  const ex = useMemo(() => makeExclusion(data, hidden), [data, hidden]);
+  const series = useMemo(() => portfolioSeries(data, metric, ex), [data, metric, ex]);
+  const note = ex.active && metric !== 'totalDebts' ? `Excludes ${ex.label}` : undefined;
   return (
     <>
       <RangeControl range={range} onChange={onRange} earliest={data.daily[0]?.date} />
-      <Block label={METRIC_LABEL[metric]} {...series} range={range} money />
+      <Block label={METRIC_LABEL[metric]} {...series} range={range} money note={note} />
     </>
   );
 }

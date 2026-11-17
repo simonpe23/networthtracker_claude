@@ -50,6 +50,8 @@ export interface SnapshotHolding {
   institution: string;
   kind: Kind;
   category: string | null;
+  /** Category id at capture time. null for debts, uncategorised assets and older snapshots. */
+  categoryId: string | null;
   value: number;
   /** Share of total assets at capture time. null for debts. */
   pct: number | null;

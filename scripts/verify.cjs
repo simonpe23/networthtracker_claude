@@ -85,7 +85,7 @@ async function functional(browser) {
   await cb('High Risk').first().uncheck();
   // 1,086,650 - (60,000 + 41,900) = 984,750
   const one = (await text(page, '.summary')).replace(/\s+/g, ' ');
-  check('leaving out one category changes only its part', one.includes('Net worth $984,750') && one.includes('Total assets $1,002,300') && !one.includes('since the snapshot') && (await text(page, '.holdings .group')).includes('$101,900 excluded'), one.slice(0, 170));
+  check('leaving out one category changes only its part', one.includes('Net worth $984,750') && one.includes('Total assets $1,002,300') && one.includes('+$7,939 (+0.8%) since the snapshot of 1 Nov 2026') && (await text(page, '.holdings .group')).includes('$101,900 excluded'), one.slice(0, 170));
   check('both holdings of that category follow, and stay listed', (await cb('High Risk').nth(1).isChecked()) === false && (await page.locator('.holdings .is-left-out').count()) === 2);
   check('the assets total matches the summary', (await text(page, '.holdings .group')).includes('$1,002,300'));
   await cb('Other').uncheck();
@@ -95,6 +95,18 @@ async function functional(browser) {
   await page.reload();
   check('the choices are remembered on this device', (await text(page, '.net-worth')) === '$962,750' && !(await cb('High Risk').first().isChecked()));
   await page.screenshot({ path: path.join(OUT, 'include-in-net-worth-1440.png') });
+  // History follows the same choice. The latest example snapshot (1 Nov) holds the car at $22,144
+  // and High Risk at $59,248 + $43,017 = $102,265. Full net worth then: $1,079,076.
+  check('the since-snapshot line compares like for like', (await text(page, '.since')).includes('since the snapshot of'));
+  await go(page, '#/history');
+  const firstRow = (await text(page, '.snapshots tbody tr')).replace(/\s+/g, ' ');
+  // 1,079,076 - 22,144 - 102,265 = 954,667
+  check('snapshot totals leave out the same categories', firstRow.includes('$954,667'), firstRow);
+  check('a quiet note says what is excluded', (await text(page, '.page')).includes('Totals exclude High Risk and Other, as on the Holdings page.'));
+  check('the chart says what it excludes', (await text(page, '.chart-meta')).includes('Excludes High Risk and Other'));
+  await page.getByRole('button', { name: /^View holdings/ }).first().click();
+  check('the expanded snapshot still lists every holding, excluded ones greyed', (await page.locator('.detail-row tbody tr').count()) === 10 && (await page.locator('.detail-row .is-left-out').count()) === 3);
+  await go(page, '#/');
   await cb('High Risk').first().check();
   await cb('Other').check();
   check('ticking both again restores the full figures', (await text(page, '.net-worth')) === '$1,086,650');

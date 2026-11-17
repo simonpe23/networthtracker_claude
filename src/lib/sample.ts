@@ -101,6 +101,7 @@ export function buildExample(now: Date): AppData {
         institution: s.institution,
         kind: s.kind,
         category: s.cat ? catName.get(s.cat)! : null,
+        categoryId: s.cat,
         value,
         pct: s.kind === 'asset' ? share(value, t.totalAssets) : null,
       })),

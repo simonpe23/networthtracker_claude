@@ -187,6 +187,7 @@ function normalise(raw: unknown): ParseResult {
           institution: str(h.institution),
           kind,
           category: kind === 'asset' ? str(h.category) || null : null,
+          categoryId: kind === 'asset' && typeof h.categoryId === 'string' && h.categoryId ? h.categoryId : null,
           value: amount(h.value ?? h.balance, `${p}.value`),
           pct: kind === 'asset' ? optAmountRaw(h.pct, `${p}.pct`) : null,
         };

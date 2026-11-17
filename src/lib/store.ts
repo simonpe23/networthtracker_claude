@@ -80,6 +80,7 @@ export function buildSnapshot(data: AppData, now: Date): Snapshot {
       institution: h.institution,
       kind: h.kind,
       category: h.kind === 'asset' ? (h.categoryId ? catName.get(h.categoryId) ?? null : null) : null,
+      categoryId: h.kind === 'asset' ? h.categoryId : null,
       value: h.value,
       pct: h.kind === 'asset' ? share(h.value, t.totalAssets) : null,
     })),

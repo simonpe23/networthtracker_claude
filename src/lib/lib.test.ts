@@ -6,6 +6,7 @@ import { parseAmount } from './format';
 import { buildExample } from './sample';
 import { emptyData, holdingSeries, reduce } from './store';
 import { decide, EMPTY_META, type SyncMeta } from './syncLogic';
+import { adjustSnapshot, dailyExcluder, makeExclusion } from './exclude';
 
 const day = (d: number, h = 10) => new Date(2026, 10, d, h, 0);
 
@@ -280,5 +281,54 @@ describe('outside allocation', () => {
   it('older backups without the flag count every category', () => {
     const r = parseBackup(JSON.stringify({ categories: [{ name: 'Cash', target: 100 }], holdings: [] }));
     expect(r.ok && r.data.categories).toMatchObject([{ name: 'Cash', target: 100, inAllocation: true }]);
+  });
+});
+
+describe('excluding categories from history', () => {
+  const withRetirement = () => {
+    let data = reduce(seed(), { type: 'saveCategories', categories: [...seed().categories, { id: 'ret', name: 'Retirement', target: null, inAllocation: false }] });
+    data = reduce(data, { type: 'addHolding', input: { kind: 'asset', name: 'Pension', institution: '', notes: '', categoryId: 'ret', value: 60000 } }, day(2));
+    return reduce(data, { type: 'takeSnapshot' }, day(2, 18));
+  };
+
+  it('snapshots keep every holding and record its category id', () => {
+    const s = withRetirement().snapshots[0];
+    expect(s).toMatchObject({ netWorth: 147499.5, totalAssets: 160000 });
+    expect(s.holdings!.find((h) => h.name === 'Pension')).toMatchObject({ category: 'Retirement', categoryId: 'ret', value: 60000 });
+  });
+
+  it('takes excluded categories out of snapshot totals without changing the snapshot', () => {
+    const data = withRetirement();
+    const before = JSON.stringify(data.snapshots);
+    const ex = makeExclusion(data, new Set(['ret']));
+    expect(adjustSnapshot(data.snapshots[0], ex)).toEqual({ netWorth: 87499.5, totalAssets: 100000, totalDebts: 12500.5, excluded: 60000 });
+    expect(JSON.stringify(data.snapshots)).toBe(before);
+  });
+
+  it('still matches after the category is renamed', () => {
+    let data = withRetirement();
+    data = reduce(data, { type: 'saveCategories', categories: data.categories.map((c) => (c.id === 'ret' ? { ...c, name: 'Pension fund' } : c)) });
+    expect(adjustSnapshot(data.snapshots[0], makeExclusion(data, new Set(['ret'])))!.excluded).toBe(60000);
+  });
+
+  it('only hides categories that are outside the allocation', () => {
+    const data = withRetirement();
+    expect(makeExclusion(data, new Set(['cash'])).active).toBe(false);
+  });
+
+  it('takes excluded categories out of the daily history', () => {
+    const data = withRetirement();
+    const minus = dailyExcluder(data, makeExclusion(data, new Set(['ret'])));
+    expect(data.daily.map((d) => [d.date, d.netWorth - minus(d)])).toEqual([
+      ['2026-11-01', 87499.5],
+      ['2026-11-02', 87499.5],
+    ]);
+  });
+
+  it('cannot split an older total-only snapshot', () => {
+    const data = withRetirement();
+    const old = { ...data.snapshots[0], holdings: null };
+    expect(adjustSnapshot(old, makeExclusion(data, new Set(['ret'])))).toBeNull();
+    expect(adjustSnapshot(old, makeExclusion(data, new Set()))).toMatchObject({ netWorth: 147499.5, excluded: 0 });
   });
 });

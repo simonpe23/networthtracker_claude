@@ -320,6 +320,7 @@ form.panel { margin-top: 32px; padding: 32px; }
 .snapshots tr.is-open th, .snapshots tr.is-open td { border-bottom: 0; }
 .detail-row td { padding: 0 0 24px; }
 .panel .data-table { margin-top: 16px; }
+.mini-table .is-left-out th, .mini-table .is-left-out td, .mini-table .is-left-out .muted { color: var(--text-3); font-weight: 400; }
 .panel .data-table tr:last-child th, .panel .data-table tr:last-child td { border-bottom: 0; padding-bottom: 0; }
 .panel .data-table th, .panel .data-table td { border-bottom-color: var(--line); }
 

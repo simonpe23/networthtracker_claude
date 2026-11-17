@@ -1,41 +1,13 @@
 import { useState } from 'react';
-import { allocation, allocationBase, inAllocation, round2, sum, totals } from '../lib/calc';
+import { allocation, allocationBase, round2, sum, totals } from '../lib/calc';
+import { adjustSnapshot, makeExclusion } from '../lib/exclude';
+import { useHiddenCategories } from '../lib/hidden';
 import { fmtDate, pct } from '../lib/format';
 import { useStore } from '../state';
 import { AllocationTable } from '../components/AllocationTable';
 import { PortfolioChart, useRange } from '../components/charts';
 import { HoldingsSection } from '../components/HoldingsSection';
-import { STORAGE_KEY } from '../lib/store';
 import { Confirm } from '../components/ui';
-
-const HIDDEN_KEY = `${STORAGE_KEY}.hiddenCategories`;
-
-/** Per-device preference: categories outside the allocation left out of the net worth figure. */
-function useHiddenCategories(): [Set<string>, (id: string, hide: boolean) => void] {
-  const [hidden, setHidden] = useState<Set<string>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]') as unknown;
-      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
-    } catch {
-      return new Set();
-    }
-  });
-  const toggle = (id: string, hide: boolean) => {
-    setHidden((prev) => {
-      const next = new Set(prev);
-      if (hide) next.add(id);
-      else next.delete(id);
-      try {
-        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next]));
-      } catch {
-        /* the choice simply resets next visit */
-      }
-      return next;
-    });
-  };
-  return [hidden, toggle];
-}
-
 
 export function ExampleNote() {
   const { data, dispatch, notify } = useStore();
@@ -73,20 +45,21 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
   const full = totals(data.holdings);
   const { base, counts, anyExcluded } = allocationBase(data);
   // Each category outside the allocation can be left out of the net worth figure on its own.
-  const outsideCats = data.categories.filter((c) => !inAllocation(c));
   const [hidden, toggleHidden] = useHiddenCategories();
-  const hiddenCats = outsideCats.filter((c) => hidden.has(c.id));
-  const hiddenIds = new Set(hiddenCats.map((c) => c.id));
+  const ex = makeExclusion(data, hidden);
+  const hiddenIds = ex.ids;
   const leftOut = sum(data.holdings.filter((h) => h.kind === 'asset' && h.categoryId !== null && hiddenIds.has(h.categoryId)).map((h) => h.value));
-  const excluding = hiddenCats.length > 0;
+  const excluding = ex.active;
   // Debts always count in full: they are not tied to any category.
   const t = excluding
     ? { totalAssets: round2(full.totalAssets - leftOut), totalDebts: full.totalDebts, netWorth: round2(full.netWorth - leftOut) }
     : full;
 
+  // Compared like for like: the last snapshot leaves out the same categories.
   const last = data.snapshots[data.snapshots.length - 1];
-  const change = last ? t.netWorth - last.netWorth : 0;
-  const changePct = last && last.netWorth !== 0 ? (change / Math.abs(last.netWorth)) * 100 : null;
+  const lastAdj = last ? adjustSnapshot(last, ex) : null;
+  const change = lastAdj ? t.netWorth - lastAdj.netWorth : 0;
+  const changePct = lastAdj && lastAdj.netWorth !== 0 ? (change / Math.abs(lastAdj.netWorth)) * 100 : null;
 
   const assets = data.holdings.filter(counts).sort((a, b) => b.value - a.value);
   const topHolding = assets[0];
@@ -102,8 +75,8 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
           <div><dt>Total assets</dt><dd>{fmt.money(t.totalAssets)}</dd></div>
           <div><dt>Total debts</dt><dd>{fmt.money(t.totalDebts)}</dd></div>
         </dl>
-        {/* The snapshot comparison uses full figures, so it is hidden while a category is excluded. */}
-        {!excluding && (
+        {/* An older total-only snapshot cannot be split, so there is no fair comparison to show. */}
+        {(!last || lastAdj) && (
           <p className="since">
             {last
               ? `${fmt.signedMoney(change)}${changePct === null ? '' : ` (${change < 0 ? '−' : '+'}${Math.abs(changePct).toFixed(1)}%)`} since the snapshot of ${fmtDate(last.takenAt)}`
