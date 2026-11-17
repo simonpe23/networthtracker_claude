@@ -222,6 +222,11 @@ async function functional(browser) {
   const file = path.join(require('os').tmpdir(), `sp-backup-${Date.now()}.json`);
   await download.saveAs(file);
   check('backup file name', /^sp-net-worth-backup-\d{4}-\d{2}-\d{2}\.json$/.test(download.suggestedFilename()), download.suggestedFilename());
+  const [xlsx] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export to Excel (.xlsx)' }).click()]);
+  const xlsxFile = path.join(require('os').tmpdir(), `sp-${Date.now()}.xlsx`);
+  await xlsx.saveAs(xlsxFile);
+  const sheets = require('child_process').execSync(`unzip -p "${xlsxFile}" xl/workbook.xml`).toString().match(/<sheet [^>]*name="([^"]+)"/g).map((m) => m.match(/name="([^"]+)"/)[1]);
+  check('Excel export has the 6 sheets', /^sp-net-worth-\d{4}-\d{2}-\d{2}\.xlsx$/.test(xlsx.suggestedFilename()) && sheets.join('|') === 'Summary|Holdings|Allocation|Snapshots|Snapshot holdings|Daily history', sheets.join('|'));
   await page.getByRole('button', { name: 'Erase everything and start again' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Erase everything' }).click();
   check('erase empties the portfolio', (await stored(page)).holdings.length === 0 && (await stored(page)).snapshots.length === 0);

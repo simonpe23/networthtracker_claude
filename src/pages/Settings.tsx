@@ -35,6 +35,15 @@ export function SettingsPage() {
     notify({ text: `Backup downloaded: ${describe(data)}.` });
   };
 
+  const downloadExcel = async () => {
+    const [{ default: writeExcelFile }, { buildWorkbook, workbookFileName }] = await Promise.all([
+      import('write-excel-file/browser'),
+      import('../lib/excel'),
+    ]);
+    await writeExcelFile(buildWorkbook(data)).toFile(workbookFileName());
+    notify({ text: 'Excel file downloaded with 6 sheets: Summary, Holdings, Allocation, Snapshots, Snapshot holdings and Daily history.' });
+  };
+
   const read = async (f: File) => {
     setImportError(null);
     const result = parseBackup(await f.text());
@@ -74,8 +83,13 @@ export function SettingsPage() {
             the browser's site data erases it.
           </p>
           <p>Right now: {describe(data)}.</p>
+          <p>
+            The JSON backup is the complete copy and the only file that can be imported again. The Excel file is for reading and analysis: one
+            sheet each for the summary, holdings, allocation, snapshots, snapshot holdings and daily history.
+          </p>
           <div className="button-row">
             <button type="button" className="btn btn-primary" onClick={download}>Export backup (JSON)</button>
+            <button type="button" className="btn btn-secondary" onClick={() => void downloadExcel()}>Export to Excel (.xlsx)</button>
             <button type="button" className="btn btn-secondary" onClick={() => file.current?.click()}>Import backup</button>
             <input
               ref={file}

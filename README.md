@@ -61,6 +61,7 @@ Deleting a holding removes it from today's totals. Its earlier daily history and
 
 - Saved in browser local storage under the key `sp-net-worth-tracker`. Clearing site data erases it, so export a backup regularly.
 - **Export** downloads one JSON file with everything.
+- **Export to Excel** downloads a readable `.xlsx` with 6 sheets: Summary, Holdings, Allocation, Snapshots, Snapshot holdings and Daily history. It is for reading and analysis and cannot be imported again.
 - **Import** validates the file first and names the exact problem if it is rejected (for example `holdings[0].value must be a number.`). Nothing is replaced until you confirm.
 - Older files without a version number are accepted. Snapshots that hold totals only are kept as recorded and shown as totals only. No holdings or daily history are invented for them.
 
@@ -86,6 +87,7 @@ src/
   lib/calc.ts         totals, shares, allocation and targets
   lib/store.ts        every state change, daily history, snapshots
   lib/backup.ts       export, validation and import of backups
+  lib/excel.ts        the Excel workbook export
   lib/sample.ts       the example portfolio
   lib/format.ts       money, percentage and date formatting
   components/         select, date picker, dialog, charts, forms, tables
