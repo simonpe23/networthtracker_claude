@@ -37,7 +37,8 @@ export function HoldingsSection() {
   const byValue = (a: Holding, b: Holding) => b.value - a.value;
   const allAssets = data.holdings.filter((h) => h.kind === 'asset');
   const allDebts = data.holdings.filter((h) => h.kind === 'debt');
-  const assets = allAssets.filter(matches).sort(byValue);
+  // Allocated holdings first, highest value first. Holdings outside the allocation always go last.
+  const assets = allAssets.filter(matches).sort((a, b) => Number(!counts(a)) - Number(!counts(b)) || byValue(a, b));
   const debts = allDebts.filter(matches).sort(byValue);
   const filtered = Boolean(q) || category !== ALL || show !== 'all';
   const activeFilters = (category !== ALL ? 1 : 0) + (show !== 'all' ? 1 : 0);
