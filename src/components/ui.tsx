@@ -75,9 +75,11 @@ interface TextFieldProps {
   multiline?: boolean;
   autoFocus?: boolean;
   className?: string;
+  type?: 'text' | 'email' | 'password';
+  autoComplete?: string;
 }
 
-export function TextField({ label, value, onChange, error, hint, inputMode, multiline, autoFocus, className }: TextFieldProps) {
+export function TextField({ label, value, onChange, error, hint, inputMode, multiline, autoFocus, className, type, autoComplete }: TextFieldProps) {
   const id = useId();
   const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
   const shared = {
@@ -85,7 +87,7 @@ export function TextField({ label, value, onChange, error, hint, inputMode, mult
     value,
     'aria-invalid': error ? true : undefined,
     'aria-describedby': describedBy,
-    autoComplete: 'off',
+    autoComplete: autoComplete ?? 'off',
     autoFocus,
   };
   return (
@@ -94,7 +96,7 @@ export function TextField({ label, value, onChange, error, hint, inputMode, mult
       {multiline ? (
         <textarea {...shared} rows={3} onChange={(e) => onChange(e.target.value)} />
       ) : (
-        <input {...shared} type="text" inputMode={inputMode} className={inputMode === 'decimal' ? 'num' : undefined} onChange={(e) => onChange(e.target.value)} />
+        <input {...shared} type={type ?? 'text'} inputMode={inputMode} className={inputMode === 'decimal' ? 'num' : undefined} onChange={(e) => onChange(e.target.value)} />
       )}
       {hint && <p className="hint" id={`${id}-hint`}>{hint}</p>}
       {error && <p className="error" id={`${id}-error`}>Error: {error}</p>}

@@ -234,6 +234,10 @@ main:focus { outline: none; }
 .form { display: flex; flex-direction: column; gap: 20px; }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
 .form-delete { margin-left: auto; }
+.form-actions.stacked { flex-direction: column; align-items: stretch; }
+.form-actions.stacked .btn { flex: none; }
+.btn:disabled { cursor: default; border-style: dashed; }
+.dialog-text strong, .setting-body strong { color: var(--text); font-weight: 600; }
 .form-static { display: flex; flex-direction: column; gap: 8px; }
 .form-static .label { font-size: 16px; font-weight: 500; color: var(--text-2); }
 .disclosure { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }

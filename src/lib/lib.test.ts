@@ -5,6 +5,7 @@ import { exportJson, parseBackup } from './backup';
 import { parseAmount } from './format';
 import { buildExample } from './sample';
 import { emptyData, holdingSeries, reduce } from './store';
+import { decide, EMPTY_META, type SyncMeta } from './syncLogic';
 
 const day = (d: number, h = 10) => new Date(2026, 10, d, h, 0);
 
@@ -224,5 +225,34 @@ describe('start my portfolio', () => {
       ['High Risk', null],
       ['Other', null],
     ]);
+  });
+});
+
+describe('sync decisions', () => {
+  const user = 'user-1';
+  const own = seed();
+  const example = buildExample(day(17));
+  const empty = emptyData();
+  const meta = (m: Partial<SyncMeta>): SyncMeta => ({ ...EMPTY_META, ...m });
+
+  it('first sign-in with nothing in the account', () => {
+    expect(decide(own, EMPTY_META, null, user)).toBe('push');
+    expect(decide(example, EMPTY_META, null, user)).toBe('none');
+    expect(decide(empty, EMPTY_META, null, user)).toBe('none');
+  });
+
+  it('first sign-in on a device when the account already has data', () => {
+    expect(decide(example, EMPTY_META, { revision: 4 }, user)).toBe('pull');
+    expect(decide(empty, EMPTY_META, { revision: 4 }, user)).toBe('pull');
+    expect(decide(own, EMPTY_META, { revision: 4 }, user)).toBe('conflict');
+    expect(decide(own, meta({ userId: 'someone-else', revision: 4 }), { revision: 4 }, user)).toBe('conflict');
+  });
+
+  it('a device that is already linked', () => {
+    const linked = meta({ userId: user, revision: 4 });
+    expect(decide(own, linked, { revision: 4 }, user)).toBe('none');
+    expect(decide(own, { ...linked, dirty: true }, { revision: 4 }, user)).toBe('push');
+    expect(decide(own, linked, { revision: 5 }, user)).toBe('pull');
+    expect(decide(own, { ...linked, dirty: true }, { revision: 5 }, user)).toBe('conflict');
   });
 });

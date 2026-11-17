@@ -4,7 +4,9 @@ import { exportJson, parseBackup } from '../lib/backup';
 import { localDate } from '../lib/format';
 import { useStore } from '../state';
 import { Select } from '../components/Select';
+import { SyncSection } from '../components/SyncSection';
 import { Checkbox, Confirm } from '../components/ui';
+import { useSync } from '../sync';
 
 const CURRENCIES: [string, string][] = [
   ['USD', 'US dollar'], ['EUR', 'Euro'], ['GBP', 'British pound'], ['SEK', 'Swedish krona'], ['NOK', 'Norwegian krone'],
@@ -18,6 +20,8 @@ const describe = (d: AppData) =>
 
 export function SettingsPage() {
   const { data, dispatch, notify } = useStore();
+  const sync = useSync();
+  const signedIn = Boolean(sync.user);
   const file = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ name: string; data: AppData; notes: string[] } | null>(null);
@@ -55,6 +59,8 @@ export function SettingsPage() {
     <section className="page" aria-labelledby="page-title">
       <h1 id="page-title" className="page-heading">Settings</h1>
 
+      <SyncSection />
+
       <div className="setting">
         <h2 className="sub-heading">Currency</h2>
         <div className="setting-body">
@@ -79,8 +85,9 @@ export function SettingsPage() {
         <h2 className="sub-heading">Backup</h2>
         <div className="setting-body">
           <p>
-            Your data is saved in this browser only, in local storage. Nothing is sent anywhere. Export a backup regularly, because clearing
-            the browser's site data erases it.
+            {signedIn
+              ? 'Your data is saved in this browser and in your account. A backup file is still worth keeping as your own copy.'
+              : "Your data is saved in this browser only, in local storage. Nothing is sent anywhere. Export a backup regularly, because clearing the browser's site data erases it."}
           </p>
           <p>Right now: {describe(data)}.</p>
           <p>
@@ -117,7 +124,7 @@ export function SettingsPage() {
             <button type="button" className="btn btn-secondary" onClick={() => setConfirm('fresh')}>
               {data.isExample ? 'Start my portfolio' : 'Erase everything and start again'}
             </button>
-            {!data.isExample && (
+            {!data.isExample && !signedIn && (
               <button type="button" className="btn btn-secondary" onClick={() => setConfirm('example')}>Load example portfolio</button>
             )}
           </div>
@@ -132,6 +139,7 @@ export function SettingsPage() {
               <p>{pending.name} is valid and contains {describe(pending.data)}.</p>
               {pending.notes.map((n) => <p key={n}>{n}</p>)}
               <p>It replaces what is in this browser now: {describe(data)}.</p>
+              {signedIn && <p>You are signed in, so it also replaces the copy in your account and on your other devices.</p>}
             </>
           }
           confirmLabel="Replace with backup"
@@ -149,6 +157,7 @@ export function SettingsPage() {
           body={
             <>
               <p>All holdings, daily history and saved snapshots in this browser are removed. Category names stay.</p>
+              {signedIn && !data.isExample && <p>You are signed in, so the copy in your account and on your other devices is emptied too.</p>}
               {!data.isExample && <p>This cannot be undone. Export a backup first if you might want this data again.</p>}
             </>
           }

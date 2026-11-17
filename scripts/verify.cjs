@@ -89,7 +89,7 @@ async function functional(browser) {
   let dlg = page.getByRole('dialog');
   check('empty form shows clear errors', (await dlg.getByText('Error: Enter a name.').count()) === 1 && (await dlg.getByText('Error: Enter an amount.').count()) === 1);
   await dlg.getByLabel('Current balance').fill('-5');
-  check('negative balance is rejected', (await dlg.getByText('Error: Enter a number of 0 or more').count()) === 1);
+  check('negative balance is rejected', await dlg.getByText('Error: Enter a number of 0 or more').waitFor({ timeout: 3000 }).then(() => true, () => false));
   await dlg.getByRole('button', { name: 'Cancel' }).click();
   check('cancel adds nothing', (await stored(page)).holdings.length === 0);
 
@@ -214,7 +214,7 @@ async function functional(browser) {
   await go(page, '#/');
   check('currency change relabels without converting', (await text(page, '.net-worth')) === '€57,500');
   await go(page, '#/settings');
-  check('currency explanation is shown', (await text(page, '.setting')).includes('It does not convert them'));
+  check('currency explanation is shown', (await page.locator('.setting', { hasText: 'Currency label' }).innerText()).includes('It does not convert them'));
 
   // Backup: export, wipe, import
   const before = await stored(page);
