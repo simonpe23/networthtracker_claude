@@ -85,13 +85,13 @@ async function functional(browser) {
   await cb('High Risk').first().uncheck();
   // 1,086,650 - (60,000 + 41,900) = 984,750
   const one = (await text(page, '.summary')).replace(/\s+/g, ' ');
-  check('leaving out one category changes only its part', one.includes('Net worth without High Risk $984,750') && one.includes('Total assets $1,002,300') && one.includes('Leaves out $101,900 in High Risk'), one.slice(0, 170));
+  check('leaving out one category changes only its part', one.includes('Net worth $984,750') && one.includes('Total assets $1,002,300') && !one.includes('since the snapshot') && (await text(page, '.holdings .group')).includes('$101,900 excluded'), one.slice(0, 170));
   check('both holdings of that category follow, and stay listed', (await cb('High Risk').nth(1).isChecked()) === false && (await page.locator('.holdings .is-left-out').count()) === 2);
   check('the assets total matches the summary', (await text(page, '.holdings .group')).includes('$1,002,300'));
   await cb('Other').uncheck();
   // 984,750 - 22,000 = 962,750
   const two = (await text(page, '.summary')).replace(/\s+/g, ' ');
-  check('leaving out both lists both', two.includes('Net worth without High Risk and Other $962,750') && two.includes('Leaves out $123,900 in High Risk and Other'), two.slice(0, 170));
+  check('leaving out both lists both', two.includes('Net worth $962,750') && (await text(page, '.holdings .group')).includes('$123,900 excluded'), two.slice(0, 170));
   await page.reload();
   check('the choices are remembered on this device', (await text(page, '.net-worth')) === '$962,750' && !(await cb('High Risk').first().isChecked()));
   await page.screenshot({ path: path.join(OUT, 'include-in-net-worth-1440.png') });

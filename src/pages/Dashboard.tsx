@@ -36,7 +36,6 @@ function useHiddenCategories(): [Set<string>, (id: string, hide: boolean) => voi
   return [hidden, toggle];
 }
 
-const listNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '');
 
 export function ExampleNote() {
   const { data, dispatch, notify } = useStore();
@@ -80,7 +79,6 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
   const hiddenIds = new Set(hiddenCats.map((c) => c.id));
   const leftOut = sum(data.holdings.filter((h) => h.kind === 'asset' && h.categoryId !== null && hiddenIds.has(h.categoryId)).map((h) => h.value));
   const excluding = hiddenCats.length > 0;
-  const namesText = listNames(hiddenCats.map((c) => c.name));
   // Debts always count in full: they are not tied to any category.
   const t = excluding
     ? { totalAssets: round2(full.totalAssets - leftOut), totalDebts: full.totalDebts, netWorth: round2(full.netWorth - leftOut) }
@@ -98,19 +96,20 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
     <>
       <ExampleNote />
       <section className="summary" aria-labelledby="nw-label">
-        <h1 id="nw-label" className="eyebrow">{excluding ? `Net worth without ${namesText}` : 'Net worth'}</h1>
+        <h1 id="nw-label" className="eyebrow">Net worth</h1>
         <p className="net-worth">{fmt.money(t.netWorth)}</p>
         <dl className="totals">
           <div><dt>Total assets</dt><dd>{fmt.money(t.totalAssets)}</dd></div>
           <div><dt>Total debts</dt><dd>{fmt.money(t.totalDebts)}</dd></div>
         </dl>
-        <p className="since">
-          {excluding
-            ? `Leaves out ${fmt.money(leftOut)} in ${namesText}. Debts are counted in full.`
-            : last
-            ? `${fmt.signedMoney(change)}${changePct === null ? '' : ` (${change < 0 ? '−' : '+'}${Math.abs(changePct).toFixed(1)}%)`} since the snapshot of ${fmtDate(last.takenAt)}`
-            : 'No snapshots saved yet. Take one to mark this moment.'}
-        </p>
+        {/* The snapshot comparison uses full figures, so it is hidden while a category is excluded. */}
+        {!excluding && (
+          <p className="since">
+            {last
+              ? `${fmt.signedMoney(change)}${changePct === null ? '' : ` (${change < 0 ? '−' : '+'}${Math.abs(changePct).toFixed(1)}%)`} since the snapshot of ${fmtDate(last.takenAt)}`
+              : 'No snapshots saved yet. Take one to mark this moment.'}
+          </p>
+        )}
         <button className="btn btn-primary summary-snapshot" type="button" onClick={onSnapshot}>Take snapshot</button>
       </section>
 

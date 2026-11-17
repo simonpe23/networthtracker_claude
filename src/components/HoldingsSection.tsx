@@ -53,6 +53,7 @@ export function HoldingsSection({ hiddenCategoryIds, onToggleCategory }: Props) 
   // Holdings outside the allocation carry an "in net worth" checkbox for their category.
   const showInclude = anyExcluded && Boolean(onToggleCategory);
   const leftOut = (h: Holding) => h.kind === 'asset' && h.categoryId !== null && Boolean(hiddenCategoryIds?.has(h.categoryId));
+  const excludedTotal = sum(allAssets.filter(leftOut).map((h) => h.value));
   const includeCell = (h: Holding) =>
     showInclude ? (
       <td className="c-include">
@@ -156,7 +157,10 @@ export function HoldingsSection({ hiddenCategoryIds, onToggleCategory }: Props) 
               <tbody>
                 {assets.length > 0 && (
                   <tr className="group">
-                    <th scope="rowgroup" colSpan={2}>Assets <span className="count">{countText(assets.length, allAssets.length)}</span></th>
+                    <th scope="rowgroup" colSpan={2}>
+                      Assets <span className="count">{countText(assets.length, allAssets.length)}</span>
+                      {excludedTotal > 0 && <span className="count">{fmt.money(excludedTotal)} excluded</span>}
+                    </th>
                     <td className="num">{fmt.money(sum(assets.filter((h) => !leftOut(h)).map((h) => h.value)))}</td>
                     <td className="num">{pct(share(sum(assets.filter(counts).map((h) => h.value)), base) ?? 0)}</td>
                     <td />
