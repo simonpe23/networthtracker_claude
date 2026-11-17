@@ -6,7 +6,7 @@ import { AllocationTable } from '../components/AllocationTable';
 import { PortfolioChart, useRange } from '../components/charts';
 import { HoldingsSection } from '../components/HoldingsSection';
 import { STORAGE_KEY } from '../lib/store';
-import { Checkbox, Confirm } from '../components/ui';
+import { Confirm } from '../components/ui';
 
 const HIDDEN_KEY = `${STORAGE_KEY}.hiddenCategories`;
 
@@ -111,20 +111,10 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
             ? `${fmt.signedMoney(change)}${changePct === null ? '' : ` (${change < 0 ? '−' : '+'}${Math.abs(changePct).toFixed(1)}%)`} since the snapshot of ${fmtDate(last.takenAt)}`
             : 'No snapshots saved yet. Take one to mark this moment.'}
         </p>
-        {anyExcluded && (
-          <fieldset className="summary-toggle">
-            <legend>Include in net worth</legend>
-            <div className="summary-toggle-options">
-              {outsideCats.map((c) => (
-                <Checkbox key={c.id} label={c.name} checked={!hidden.has(c.id)} onChange={(include) => toggleHidden(c.id, !include)} />
-              ))}
-            </div>
-          </fieldset>
-        )}
         <button className="btn btn-primary summary-snapshot" type="button" onClick={onSnapshot}>Take snapshot</button>
       </section>
 
-      <HoldingsSection hiddenCategoryIds={hiddenIds} />
+      <HoldingsSection hiddenCategoryIds={hiddenIds} onToggleCategory={toggleHidden} />
 
       <section className="section" aria-labelledby="growth-heading">
         <div className="section-head">

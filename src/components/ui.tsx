@@ -104,16 +104,25 @@ export function TextField({ label, value, onChange, error, hint, inputMode, mult
   );
 }
 
-export function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+interface CheckboxProps {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  /** Overrides the accessible name when the visible label is short or hidden. */
+  ariaLabel?: string;
+  labelClassName?: string;
+}
+
+export function Checkbox({ label, checked, onChange, ariaLabel, labelClassName }: CheckboxProps) {
   return (
     <label className="checkbox">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={checked} aria-label={ariaLabel} onChange={(e) => onChange(e.target.checked)} />
       <span className="box" aria-hidden="true">
         {checked && (
           <svg width="16" height="12" viewBox="0 0 16 12"><path d="M1.5 6l4.5 4.5 8.5-9" fill="none" stroke="#131313" strokeWidth="2.25" /></svg>
         )}
       </span>
-      <span>{label}</span>
+      <span className={labelClassName}>{label}</span>
     </label>
   );
 }

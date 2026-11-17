@@ -6,13 +6,19 @@ import { useStore } from '../state';
 import { BulkUpdate } from './BulkUpdate';
 import { HoldingForm } from './HoldingForm';
 import { Select } from './Select';
-import { Segmented, TextField } from './ui';
+import { Checkbox, Segmented, TextField } from './ui';
 
 type Show = 'all' | 'asset' | 'debt';
 const ALL = '__all__';
 const NONE = '__none__';
 
-export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set<string> }) {
+interface Props {
+  /** Categories outside the allocation that are left out of the net worth figure. */
+  hiddenCategoryIds?: Set<string>;
+  onToggleCategory?: (categoryId: string, hide: boolean) => void;
+}
+
+export function HoldingsSection({ hiddenCategoryIds, onToggleCategory }: Props) {
   const { data, fmt } = useStore();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState(ALL);
@@ -27,7 +33,6 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
   const q = search.trim().toLowerCase();
   const matches = (h: Holding) => {
     if (show !== 'all' && h.kind !== show) return false;
-    if (h.kind === 'asset' && h.categoryId !== null && hiddenCategoryIds?.has(h.categoryId)) return false;
     if (category !== ALL) {
       if (h.kind !== 'asset') return false;
       const id = h.categoryId && catName.has(h.categoryId) ? h.categoryId : NONE;
@@ -45,6 +50,23 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
   const activeFilters = (category !== ALL ? 1 : 0) + (show !== 'all' ? 1 : 0);
   const countText = (shown: number, all: number) => (shown === all ? `${all} ${all === 1 ? 'holding' : 'holdings'}` : `${shown} of ${all} holdings`);
 
+  // Holdings outside the allocation carry an "in net worth" checkbox for their category.
+  const showInclude = anyExcluded && Boolean(onToggleCategory);
+  const leftOut = (h: Holding) => h.kind === 'asset' && h.categoryId !== null && Boolean(hiddenCategoryIds?.has(h.categoryId));
+  const includeCell = (h: Holding) =>
+    showInclude ? (
+      <td className="c-include">
+        {h.kind === 'asset' && !counts(h) && h.categoryId !== null && (
+          <Checkbox
+            label="In net worth"
+            labelClassName="include-label"
+            ariaLabel={`Include ${categoryOf(h)} in net worth`}
+            checked={!leftOut(h)}
+            onChange={(include) => onToggleCategory!(h.categoryId as string, !include)}
+          />
+        )}
+      </td>
+    ) : null;
   const actions = (h: Holding) => (
     <td className="c-actions">
       <button className="link" type="button" aria-label={`Edit ${h.name}`} onClick={() => setForm({ holding: h })}>Edit</button>
@@ -128,21 +150,23 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
                   <th scope="col" className="num">Value</th>
                   <th scope="col" className="num">{anyExcluded ? '% of allocation' : '% of assets'}</th>
                   <th scope="col"><span className="sr-only">Actions</span></th>
+                  {showInclude && <th scope="col" className="c-include">In net worth</th>}
                 </tr>
               </thead>
               <tbody>
                 {assets.length > 0 && (
                   <tr className="group">
                     <th scope="rowgroup" colSpan={2}>Assets <span className="count">{countText(assets.length, allAssets.length)}</span></th>
-                    <td className="num">{fmt.money(sum(assets.map((h) => h.value)))}</td>
+                    <td className="num">{fmt.money(sum(assets.filter((h) => !leftOut(h)).map((h) => h.value)))}</td>
                     <td className="num">{pct(share(sum(assets.filter(counts).map((h) => h.value)), base) ?? 0)}</td>
                     <td />
+                    {showInclude && <td />}
                   </tr>
                 )}
                 {assets.map((h) => {
                   const s = counts(h) ? share(h.value, base) ?? 0 : null;
                   return (
-                    <tr key={h.id} className="row">
+                    <tr key={h.id} className={leftOut(h) ? 'row is-left-out' : 'row'}>
                       {nameCell(h)}
                       <td className="c-cat">{categoryOf(h)}</td>
                       <td className="num c-value">{fmt.money(h.value)}</td>
@@ -157,6 +181,7 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
                         )}
                       </td>
                       {actions(h)}
+                      {includeCell(h)}
                     </tr>
                   );
                 })}
@@ -166,6 +191,7 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
                     <td className="num">{fmt.money(-sum(debts.map((h) => h.value)))}</td>
                     <td className="num" />
                     <td />
+                    {showInclude && <td />}
                   </tr>
                 )}
                 {debts.map((h) => (
@@ -175,6 +201,7 @@ export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set
                     <td className="num c-value">{fmt.money(-h.value)}</td>
                     <td className="num c-share"><span className="sr-only">Not counted in allocation</span></td>
                     {actions(h)}
+                    {includeCell(h)}
                   </tr>
                 ))}
               </tbody>
