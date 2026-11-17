@@ -104,6 +104,22 @@ async function functional(browser) {
   check('share uses assets before debts (30,000 / 100,000)', (await btcRow.locator('.share-num').innerText()) === '30.0%');
   check('institution shown under name', (await text(page, '.holdings .row .inst')) === 'Marcus');
 
+  // A new category can be created straight from the holding form
+  await page.getByRole('button', { name: 'Add holding' }).click();
+  dlg = page.getByRole('dialog', { name: 'Add holding' });
+  await dlg.getByLabel('Name').fill('Flat');
+  await dlg.getByLabel('Current balance').fill('0');
+  await pick(page, 'Category', 'New category...', dlg);
+  await dlg.getByRole('button', { name: 'Save holding' }).click();
+  check('new category needs a name', (await dlg.getByText('Error: Enter a name for the new category.').count()) === 1);
+  await dlg.getByLabel('New category name').fill('Real Estate');
+  await dlg.getByRole('button', { name: 'Save holding' }).click();
+  let afterNew = await stored(page);
+  check('category created from the holding form and assigned', afterNew.categories.some((c) => c.name === 'Real Estate') && afterNew.holdings.find((h) => h.name === 'Flat').categoryId === afterNew.categories.find((c) => c.name === 'Real Estate').id);
+  await page.getByRole('button', { name: 'Edit Flat' }).click();
+  await page.getByRole('button', { name: 'Delete holding' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete holding' }).click();
+
   // Persistence
   await page.reload();
   check('data survives a reload', (await text(page, '.net-worth')) === '$87,500' && (await page.locator('.holdings .row').count()) === 4);

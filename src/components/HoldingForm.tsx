@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import type { Holding, Kind } from '../types';
+import { hasTargets } from '../lib/calc';
 import { parseAmount } from '../lib/format';
+import { uid } from '../lib/store';
 import { useStore } from '../state';
 import { Select } from './Select';
 import { Dialog, Segmented, TextField } from './ui';
 
 const NONE = '__none__';
+const NEW = '__new__';
 
 export function HoldingForm({ holding, onClose }: { holding: Holding | null; onClose: () => void }) {
   const { data, dispatch, notify, fmt } = useStore();
@@ -13,6 +16,7 @@ export function HoldingForm({ holding, onClose }: { holding: Holding | null; onC
   const [name, setName] = useState(holding?.name ?? '');
   const [balance, setBalance] = useState(holding ? String(holding.value) : '');
   const [categoryId, setCategoryId] = useState(holding ? holding.categoryId ?? NONE : data.categories[0]?.id ?? NONE);
+  const [newCategory, setNewCategory] = useState('');
   const [institution, setInstitution] = useState(holding?.institution ?? '');
   const [notes, setNotes] = useState(holding?.notes ?? '');
   const [details, setDetails] = useState(Boolean(holding?.institution || holding?.notes));
@@ -23,29 +27,46 @@ export function HoldingForm({ holding, onClose }: { holding: Holding | null; onC
   const errors = {
     name: name.trim() ? null : 'Enter a name.',
     balance: balance.trim() === '' ? 'Enter an amount.' : value === null ? 'Enter a number of 0 or more, for example 1250.50.' : null,
+    newCategory: kind === 'asset' && categoryId === NEW && !newCategory.trim() ? 'Enter a name for the new category.' : null,
   };
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
-    if (errors.name || errors.balance || value === null) {
+    if (errors.name || errors.balance || errors.newCategory || value === null) {
       const form = e.currentTarget as HTMLFormElement;
       requestAnimationFrame(() => form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
       return;
+    }
+    // A category typed here is created on the spot. An existing name is reused.
+    let chosen: string | null = categoryId === NONE ? null : categoryId;
+    let created: string | null = null;
+    if (kind === 'asset' && categoryId === NEW) {
+      const wanted = newCategory.trim();
+      const existing = data.categories.find((c) => c.name.toLowerCase() === wanted.toLowerCase());
+      chosen = existing?.id ?? uid();
+      if (!existing) {
+        created = wanted;
+        dispatch({
+          type: 'saveCategories',
+          categories: [...data.categories, { id: chosen, name: wanted, target: hasTargets(data.categories) ? 0 : null }],
+        });
+      }
     }
     const input = {
       name: name.trim(),
       institution: institution.trim(),
       notes: notes.trim(),
-      categoryId: categoryId === NONE ? null : categoryId,
+      categoryId: chosen,
       value,
     };
+    const extra = created ? ` New category: ${created}${hasTargets(data.categories) ? ', with a 0% target' : ''}.` : '';
     if (holding) {
       dispatch({ type: 'updateHolding', id: holding.id, input });
-      notify({ text: `Saved ${input.name}.` });
+      notify({ text: `Saved ${input.name}.${extra}`, link: created ? { href: '#/allocation', label: 'Manage categories' } : undefined });
     } else {
       dispatch({ type: 'addHolding', input: { ...input, kind } });
-      notify({ text: `Added ${input.name} at ${fmt.money(value)}.` });
+      notify({ text: `Added ${input.name} at ${fmt.money(value)}.${extra}`, link: created ? { href: '#/allocation', label: 'Manage categories' } : undefined });
     }
     onClose();
   };
@@ -105,8 +126,15 @@ export function HoldingForm({ holding, onClose }: { holding: Holding | null; onC
             label="Category"
             value={categoryId}
             onChange={setCategoryId}
-            options={[...data.categories.map((c) => ({ value: c.id, label: c.name })), { value: NONE, label: 'Uncategorised' }]}
+            options={[
+              ...data.categories.map((c) => ({ value: c.id, label: c.name })),
+              { value: NONE, label: 'Uncategorised' },
+              { value: NEW, label: 'New category...' },
+            ]}
           />
+        )}
+        {kind === 'asset' && categoryId === NEW && (
+          <TextField label="New category name" value={newCategory} onChange={setNewCategory} error={submitted ? errors.newCategory : null} autoFocus />
         )}
         <div className="disclosure">
           <button type="button" className="link" aria-expanded={details} onClick={() => setDetails((d) => !d)}>
