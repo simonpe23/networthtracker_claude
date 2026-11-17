@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Holding } from '../types';
-import { share, sum, totals } from '../lib/calc';
+import { allocationBase, share, sum } from '../lib/calc';
 import { pct } from '../lib/format';
 import { useStore } from '../state';
 import { BulkUpdate } from './BulkUpdate';
@@ -21,7 +21,7 @@ export function HoldingsSection() {
   const [form, setForm] = useState<{ holding: Holding | null } | null>(null);
   const [bulk, setBulk] = useState(false);
 
-  const { totalAssets } = totals(data.holdings);
+  const { base, counts, anyExcluded } = allocationBase(data);
   const catName = new Map(data.categories.map((c) => [c.id, c.name]));
   const categoryOf = (h: Holding) => (h.kind === 'debt' ? 'Debt' : (h.categoryId && catName.get(h.categoryId)) || 'Uncategorised');
   const q = search.trim().toLowerCase();
@@ -124,7 +124,7 @@ export function HoldingsSection() {
                   <th scope="col">Name</th>
                   <th scope="col">Category</th>
                   <th scope="col" className="num">Value</th>
-                  <th scope="col" className="num">% of assets</th>
+                  <th scope="col" className="num">{anyExcluded ? '% of allocation' : '% of assets'}</th>
                   <th scope="col"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -133,20 +133,26 @@ export function HoldingsSection() {
                   <tr className="group">
                     <th scope="rowgroup" colSpan={2}>Assets <span className="count">{countText(assets.length, allAssets.length)}</span></th>
                     <td className="num">{fmt.money(sum(assets.map((h) => h.value)))}</td>
-                    <td className="num">{pct(share(sum(assets.map((h) => h.value)), totalAssets) ?? 0)}</td>
+                    <td className="num">{pct(share(sum(assets.filter(counts).map((h) => h.value)), base) ?? 0)}</td>
                     <td />
                   </tr>
                 )}
                 {assets.map((h) => {
-                  const s = share(h.value, totalAssets) ?? 0;
+                  const s = counts(h) ? share(h.value, base) ?? 0 : null;
                   return (
                     <tr key={h.id} className="row">
                       {nameCell(h)}
                       <td className="c-cat">{categoryOf(h)}</td>
                       <td className="num c-value">{fmt.money(h.value)}</td>
                       <td className="num c-share">
-                        <span className="bar" aria-hidden="true"><span style={{ width: `${s}%` }} /></span>
-                        <span className="share-num">{pct(s)}</span>
+                        {s === null ? (
+                          <span className="outside">Outside allocation</span>
+                        ) : (
+                          <>
+                            <span className="bar" aria-hidden="true"><span style={{ width: `${s}%` }} /></span>
+                            <span className="share-num">{pct(s)}</span>
+                          </>
+                        )}
                       </td>
                       {actions(h)}
                     </tr>

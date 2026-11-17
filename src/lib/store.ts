@@ -19,7 +19,7 @@ export function emptyData(categories?: Category[]): AppData {
     currency: 'USD',
     showCents: false,
     isExample: false,
-    categories: categories ?? DEFAULT_CATEGORY_NAMES.map((name) => ({ id: uid(), name, target: null })),
+    categories: categories ?? DEFAULT_CATEGORY_NAMES.map((name) => ({ id: uid(), name, target: null, inAllocation: true })),
     holdings: [],
     removedHoldings: [],
     daily: [],

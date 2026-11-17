@@ -272,6 +272,10 @@ form.panel { margin-top: 32px; padding: 32px; }
 /* Category editor */
 .cat-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 80px; gap: 16px; align-items: start; }
 .cat-row > .link { margin-top: 35px; justify-self: start; }
+.cat-row > .checkbox { grid-column: 1 / -1; }
+.cat-row .form-static { gap: 8px; }
+.cat-row .form-static .muted { line-height: 48px; }
+.c-share .outside { color: var(--text-3); }
 .target-total { padding-top: 16px; border-top: 1px solid var(--line); }
 
 /* Charts */

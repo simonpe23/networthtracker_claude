@@ -1,5 +1,5 @@
 import type { AppData } from '../types';
-import { allocation, share, totals } from './calc';
+import { allocation, outsideAllocation, share, totals } from './calc';
 import { localDate, parseLocalDate } from './format';
 
 type Cell = { value: string | number | Date; type: typeof String | typeof Number | typeof Date; format?: string; fontWeight?: 'bold'; align?: 'right' } | null;
@@ -75,14 +75,17 @@ export function buildWorkbook(data: AppData, now: Date = new Date()): Sheet[] {
     sheet(
       'Allocation',
       [['Category', 24], ['Value', 18, R], ['Actual %', 12, R], ['Target %', 12, R], ['Difference (points)', 20, R], ['Amount vs target', 20, R]],
-      allocation(data).map((r) => [
+      [
+        ...allocation(data).map((r) => [
         text(r.name),
         money(r.value),
         pct(r.actual),
         pct(r.target),
         r.diffPct === null ? null : { value: Math.round(r.diffPct * 100) / 100, type: Number, format: '+0.0;-0.0;0.0' },
         r.diffAmount === null ? null : { value: r.diffAmount, type: Number, format: '+#,##0.00;-#,##0.00;0.00' },
-      ]),
+        ]),
+        ...outsideAllocation(data).map((r) => [text(r.name), money(r.value), null, null, null, { value: 'Outside allocation', type: String, align: 'right' } as Cell]),
+      ],
     ),
     sheet(
       'Snapshots',

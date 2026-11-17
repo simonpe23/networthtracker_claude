@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppData } from '../types';
-import { allocation, targetsValid, targetTotal, totals } from './calc';
+import { allocation, allocationBase, outsideAllocation, targetsValid, targetTotal, totals } from './calc';
 import { exportJson, parseBackup } from './backup';
 import { parseAmount } from './format';
 import { buildExample } from './sample';
@@ -11,9 +11,9 @@ const day = (d: number, h = 10) => new Date(2026, 10, d, h, 0);
 
 function seed(): AppData {
   let data = emptyData([
-    { id: 'cash', name: 'Cash', target: 25 },
-    { id: 'btc', name: 'Bitcoin', target: 25 },
-    { id: 'index', name: 'Index Funds', target: 50 },
+    { id: 'cash', name: 'Cash', target: 25, inAllocation: true },
+    { id: 'btc', name: 'Bitcoin', target: 25, inAllocation: true },
+    { id: 'index', name: 'Index Funds', target: 50, inAllocation: true },
   ]);
   const add = (name: string, value: number, categoryId: string | null, kind: 'asset' | 'debt' = 'asset') => {
     data = reduce(data, { type: 'addHolding', input: { kind, name, institution: '', notes: '', categoryId, value } }, day(1));
@@ -152,7 +152,7 @@ describe('snapshots', () => {
     const before = JSON.stringify(data.snapshots);
     const id = idOf(data, 'Savings');
     data = reduce(data, { type: 'updateHolding', id, input: { name: 'Renamed', institution: 'X', notes: '', categoryId: 'btc', value: 1 } }, day(6));
-    data = reduce(data, { type: 'saveCategories', categories: [{ id: 'btc', name: 'Crypto', target: 100 }] }, day(6));
+    data = reduce(data, { type: 'saveCategories', categories: [{ id: 'btc', name: 'Crypto', target: 100, inAllocation: true }] }, day(6));
     data = reduce(data, { type: 'deleteHolding', id: idOf(data, 'World fund') }, day(7));
     data = reduce(data, { type: 'bulkUpdate', values: { [idOf(data, 'Bitcoin')]: 99 } }, day(8));
     expect(JSON.stringify(data.snapshots)).toBe(before);
@@ -254,5 +254,31 @@ describe('sync decisions', () => {
     expect(decide(own, { ...linked, dirty: true }, { revision: 4 }, user)).toBe('push');
     expect(decide(own, linked, { revision: 5 }, user)).toBe('pull');
     expect(decide(own, { ...linked, dirty: true }, { revision: 5 }, user)).toBe('conflict');
+  });
+});
+
+describe('outside allocation', () => {
+  it('counts in net worth but not in allocation shares or targets', () => {
+    let data = reduce(seed(), { type: 'saveCategories', categories: [...seed().categories, { id: 'ret', name: 'Retirement', target: null, inAllocation: false }] });
+    data = reduce(data, { type: 'addHolding', input: { kind: 'asset', name: 'Pension', institution: '', notes: '', categoryId: 'ret', value: 60000 } }, day(2));
+    expect(totals(data.holdings)).toEqual({ totalAssets: 160000, totalDebts: 12500.5, netWorth: 147499.5 });
+    expect(allocationBase(data)).toMatchObject({ base: 100000, outside: 60000, totalAssets: 160000, anyExcluded: true });
+    expect(allocation(data).map((r) => [r.name, r.actual, r.diffAmount])).toEqual([
+      ['Cash', 20, -5000],
+      ['Bitcoin', 30, 5000],
+      ['Index Funds', 50, 0],
+    ]);
+    expect(outsideAllocation(data)).toEqual([{ id: 'ret', name: 'Retirement', count: 1, value: 60000, ofTotal: 37.5 }]);
+    expect(targetsValid(data.categories)).toBe(true);
+  });
+
+  it('ignores a target left on an excluded category', () => {
+    expect(targetsValid([{ target: 100 }, { target: 40, inAllocation: false }])).toBe(true);
+    expect(targetTotal([{ target: 60 }, { target: 40, inAllocation: false }])).toBe(60);
+  });
+
+  it('older backups without the flag count every category', () => {
+    const r = parseBackup(JSON.stringify({ categories: [{ name: 'Cash', target: 100 }], holdings: [] }));
+    expect(r.ok && r.data.categories).toMatchObject([{ name: 'Cash', target: 100, inAllocation: true }]);
   });
 });

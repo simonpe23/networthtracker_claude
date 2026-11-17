@@ -3,8 +3,13 @@ export type Kind = 'asset' | 'debt';
 export interface Category {
   id: string;
   name: string;
-  /** Target share of total assets, in percent. null means no target. */
+  /** Target share of allocated assets, in percent. null means no target. */
   target: number | null;
+  /**
+   * false for things that belong in net worth but not in the investment mix,
+   * such as a retirement account, a car or a rental deposit.
+   */
+  inAllocation: boolean;
 }
 
 export interface Holding {

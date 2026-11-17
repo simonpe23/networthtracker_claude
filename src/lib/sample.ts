@@ -31,12 +31,13 @@ interface Spec {
 
 const DAYS = 365;
 
-const CATS = [
-  { id: 'ex-cat-index', name: 'Index Funds', target: 55 },
-  { id: 'ex-cat-btc', name: 'Bitcoin', target: 20 },
-  { id: 'ex-cat-cash', name: 'Cash', target: 10 },
-  { id: 'ex-cat-risk', name: 'High Risk', target: 10 },
-  { id: 'ex-cat-other', name: 'Other', target: 5 },
+const CATS: { id: string; name: string; target: number | null; inAllocation: boolean }[] = [
+  { id: 'ex-cat-index', name: 'Index Funds', target: 55, inAllocation: true },
+  { id: 'ex-cat-btc', name: 'Bitcoin', target: 20, inAllocation: true },
+  { id: 'ex-cat-cash', name: 'Cash', target: 15, inAllocation: true },
+  { id: 'ex-cat-risk', name: 'High Risk', target: 10, inAllocation: true },
+  // Counted in net worth, kept out of the allocation percentages.
+  { id: 'ex-cat-other', name: 'Other', target: null, inAllocation: false },
 ];
 
 const SPECS: Spec[] = [

@@ -66,6 +66,15 @@ async function functional(browser) {
   check('first visit shows the labelled example portfolio', (await text(page, '.example-note')).includes('Example portfolio'));
   check('example net worth = assets - debts', (await text(page, '.net-worth')) === '$1,086,650' && (await text(page, '.totals')).replace(/\s+/g, ' ') === 'Total assets $1,104,200 Total debts $17,550');
 
+  // Outside allocation: the example keeps the "Other" category (the car) out of the percentages
+  const carShare = await page.locator('.holdings .row', { hasText: 'Car' }).first().locator('.c-share').innerText();
+  check('a holding outside the allocation is marked, not given a share', carShare === 'Outside allocation' && (await text(page, '.holdings thead')).includes('% of allocation'), carShare);
+  await go(page, '#/allocation');
+  const lead = await text(page, '.page .lead');
+  check('allocation is based on allocated assets only', lead.includes('Shares are calculated on allocated assets: $1,082,200. Another $22,000 sits in categories outside the allocation'), lead);
+  check('categories outside the allocation are listed separately', (await text(page, '.outside-table tbody')).replace(/\s+/g, ' ') === 'Other 1 $22,000 2.0%');
+  await go(page, '#/');
+
   // Filters and search
   await page.getByLabel('Search holdings').fill('chase');
   check('search matches name and institution', (await page.locator('.holdings .row').count()) === 2);
@@ -88,7 +97,10 @@ async function functional(browser) {
   await page.getByRole('button', { name: 'Save holding' }).click();
   let dlg = page.getByRole('dialog');
   check('empty form shows clear errors', (await dlg.getByText('Error: Enter a name.').count()) === 1 && (await dlg.getByText('Error: Enter an amount.').count()) === 1);
+  // Let the form finish moving focus to the first error before typing elsewhere.
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-invalid') === 'true');
   await dlg.getByLabel('Current balance').fill('-5');
+  await dlg.getByLabel('Current balance').press('Tab');
   check('negative balance is rejected', await dlg.getByText('Error: Enter a number of 0 or more').waitFor({ timeout: 3000 }).then(() => true, () => false));
   await dlg.getByRole('button', { name: 'Cancel' }).click();
   check('cancel adds nothing', (await stored(page)).holdings.length === 0);

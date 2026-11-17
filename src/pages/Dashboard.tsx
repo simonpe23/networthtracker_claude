@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { allocation, totals } from '../lib/calc';
+import { allocation, allocationBase, totals } from '../lib/calc';
 import { fmtDate, pct } from '../lib/format';
 import { useStore } from '../state';
 import { AllocationTable } from '../components/AllocationTable';
@@ -45,7 +45,8 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
   const change = last ? t.netWorth - last.netWorth : 0;
   const changePct = last && last.netWorth !== 0 ? (change / Math.abs(last.netWorth)) * 100 : null;
 
-  const assets = data.holdings.filter((h) => h.kind === 'asset').sort((a, b) => b.value - a.value);
+  const { base, counts, anyExcluded } = allocationBase(data);
+  const assets = data.holdings.filter(counts).sort((a, b) => b.value - a.value);
   const topHolding = assets[0];
   const topCategory = allocation(data).sort((a, b) => b.value - a.value)[0];
 
@@ -86,9 +87,9 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
           <h2 id="alloc-heading" className="page-heading">Allocation</h2>
           <a className="link" href="#/allocation">Manage categories and targets</a>
         </div>
-        {topHolding && t.totalAssets > 0 && (
+        {topHolding && topCategory && base > 0 && (
           <p className="lead">
-            Largest holding: {topHolding.name}, {pct((topHolding.value / t.totalAssets) * 100)} of total assets. Largest category:{' '}
+            Largest holding: {topHolding.name}, {pct((topHolding.value / base) * 100)} of {anyExcluded ? 'allocated assets' : 'total assets'}. Largest category:{' '}
             {topCategory.name}, {pct(topCategory.actual)}.
           </p>
         )}

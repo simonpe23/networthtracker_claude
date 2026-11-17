@@ -78,7 +78,9 @@ function normalise(raw: unknown): ParseResult {
     let id = str(o.id) || uid();
     if (catIds.has(id)) id = uid();
     catIds.add(id);
-    const cat = { id, name, target };
+    // Older files have no flag: every category then counts in the allocation.
+    const inAlloc = o.inAllocation !== false;
+    const cat = { id, name, target: inAlloc ? target : null, inAllocation: inAlloc };
     categories.push(cat);
     byName.set(name.toLowerCase(), cat);
   });
@@ -89,7 +91,7 @@ function normalise(raw: unknown): ParseResult {
   const categoryByName = (name: string) => {
     let cat = byName.get(name.toLowerCase());
     if (!cat) {
-      cat = { id: uid(), name, target: null };
+      cat = { id: uid(), name, target: null, inAllocation: true };
       categories.push(cat);
       byName.set(name.toLowerCase(), cat);
       catIds.add(cat.id);

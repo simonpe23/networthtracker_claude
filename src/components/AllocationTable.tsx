@@ -1,4 +1,4 @@
-import { allocation, hasTargets } from '../lib/calc';
+import { allocation, hasTargets, outsideAllocation } from '../lib/calc';
 import { pct, signedPts } from '../lib/format';
 import { useStore } from '../state';
 
@@ -19,11 +19,12 @@ export function DiffMoney({ value }: { value: number | null }) {
 export function AllocationTable() {
   const { data, fmt } = useStore();
   const rows = allocation(data);
+  const outside = outsideAllocation(data);
   const targets = hasTargets(data.categories);
   const top = Math.max(10, ...rows.map((r) => Math.max(r.actual, r.target ?? 0)));
   const scale = Math.min(100, Math.ceil(top / 10) * 10);
 
-  if (rows.every((r) => r.value === 0)) {
+  if (rows.every((r) => r.value === 0) && outside.every((r) => r.value === 0)) {
     return <p className="empty">Add an asset to see how your money is spread across categories.</p>;
   }
 
@@ -72,6 +73,32 @@ export function AllocationTable() {
           ))}
         </tbody>
       </table>
+      {outside.length > 0 && (
+        <>
+          <h3 className="sub-heading list-heading">Outside allocation</h3>
+          <p className="hint">Counted in net worth and total assets. Left out of the percentages and targets above.</p>
+          <table className="data-table stack-table outside-table">
+            <thead>
+              <tr>
+                <th scope="col">Category</th>
+                <th scope="col" className="num">Holdings</th>
+                <th scope="col" className="num">Value</th>
+                <th scope="col" className="num">% of total assets</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outside.map((r) => (
+                <tr key={r.id}>
+                  <th scope="row">{r.name}</th>
+                  <td className="num" data-label="Holdings">{r.count}</td>
+                  <td className="num" data-label="Value">{fmt.money(r.value)}</td>
+                  <td className="num" data-label="% of total assets">{r.ofTotal === null ? pct(0) : pct(r.ofTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </>
   );
 }

@@ -49,7 +49,7 @@ export function HoldingForm({ holding, onClose }: { holding: Holding | null; onC
         created = wanted;
         dispatch({
           type: 'saveCategories',
-          categories: [...data.categories, { id: chosen, name: wanted, target: hasTargets(data.categories) ? 0 : null }],
+          categories: [...data.categories, { id: chosen, name: wanted, target: hasTargets(data.categories) ? 0 : null, inAllocation: true }],
         });
       }
     }
