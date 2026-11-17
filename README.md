@@ -2,7 +2,7 @@
 
 A personal net worth and asset allocation tracker. It shows what you own, how your wealth changes over time, and whether too much money sits in one asset or category.
 
-Everything is entered by hand and stored in your browser. There are no accounts, bank connections, price feeds or cloud sync.
+Everything is entered by hand and stored in your browser. Signing in is optional and syncs the same portfolio across your devices. There are no bank connections or price feeds.
 
 ## Run it locally
 
@@ -33,7 +33,7 @@ npm run preview
 - **Holdings (dashboard):** net worth, total assets and total debts, then every holding with category, value and percentage of total assets. Search, category filter, asset or debt filter, add, edit, delete, and a bulk "Update balances" flow.
 - **Allocation:** your own categories with target percentages that must total exactly 100%. Each category shows actual against target, the difference in percentage points, and the amount over or under target.
 - **History:** a chart for the entire portfolio or any single holding (value and share of total assets), with date ranges. Saved snapshots can be expanded to see their original holdings.
-- **Settings:** currency label, JSON backup export and import, example portfolio, start over.
+- **Settings:** sync across devices, currency label, JSON backup and Excel export, import, example portfolio, start over.
 
 ## How the numbers work
 
@@ -57,9 +57,23 @@ Two separate records are kept:
 
 Deleting a holding removes it from today's totals. Its earlier daily history and every snapshot that includes it are kept, and it stays selectable on the History page as "(deleted)".
 
+## Sync across devices
+
+Optional. In Settings, create an account with an email and password, confirm the email, and sign in on each device.
+
+- Changes save to your account about 1 second after you make them.
+- Other devices pick them up when the app is opened or comes back into view, or with **Sync now**.
+- The example portfolio is never uploaded.
+- Each save carries a revision number. If two devices changed the data since they last agreed, the app asks which copy to keep. It never overwrites one silently.
+- Offline changes stay on the device and sync when the connection returns.
+- Signing out keeps the data on the device and stops syncing.
+- There is no password reset inside the app yet. Reset a password from the Supabase dashboard under Authentication, Users.
+
+The sync service is a Supabase project. Its address and publishable key are in `.env`; both are public by design. The table definition and access rules are in `supabase/schema.sql`: one row per user, and a user can only read or write their own row. Delete the two lines in `.env` to run the app with no sync at all.
+
 ## Your data
 
-- Saved in browser local storage under the key `sp-net-worth-tracker`. Clearing site data erases it, so export a backup regularly.
+- Saved in browser local storage under the key `sp-net-worth-tracker`, and in your account if you are signed in. Without sign-in, clearing site data erases it, so export a backup regularly.
 - **Export** downloads one JSON file with everything.
 - **Export to Excel** downloads a readable `.xlsx` with 6 sheets: Summary, Holdings, Allocation, Snapshots, Snapshot holdings and Daily history. It is for reading and analysis and cannot be imported again.
 - **Import** validates the file first and names the exact problem if it is rejected (for example `holdings[0].value must be a number.`). Nothing is replaced until you confirm.
@@ -79,6 +93,12 @@ Browser checks at 1440px and 390px wide (flows, persistence, measured text contr
 node scripts/verify.cjs
 ```
 
+Sync between two devices, using a stand-in for the sync service so no real account is touched:
+
+```bash
+node scripts/verify-sync.cjs
+```
+
 ## Project layout
 
 ```
@@ -92,6 +112,10 @@ src/
   lib/format.ts       money, percentage and date formatting
   components/         select, date picker, dialog, charts, forms, tables
   pages/              Dashboard (Holdings), Allocation, History, Settings
+  sync.tsx            sign-in state and the sync engine
+  lib/syncLogic.ts    when to push, pull or ask
+supabase/schema.sql   the sync table and its access rules
 scripts/verify.cjs    browser checks and screenshots
+scripts/verify-sync.cjs  two-device sync checks
 screenshots/          the app at 1440px and 390px wide
 ```
