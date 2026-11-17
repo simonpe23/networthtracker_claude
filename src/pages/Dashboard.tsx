@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { allocation, allocationBase, inAllocation, round2, totals } from '../lib/calc';
+import { allocation, allocationBase, inAllocation, round2, sum, totals } from '../lib/calc';
 import { fmtDate, pct } from '../lib/format';
 import { useStore } from '../state';
 import { AllocationTable } from '../components/AllocationTable';
@@ -8,27 +8,35 @@ import { HoldingsSection } from '../components/HoldingsSection';
 import { STORAGE_KEY } from '../lib/store';
 import { Checkbox, Confirm } from '../components/ui';
 
-const VIEW_KEY = `${STORAGE_KEY}.includeOutside`;
+const HIDDEN_KEY = `${STORAGE_KEY}.hiddenCategories`;
 
-/** Per-device preference: whether the summary includes categories outside the allocation. */
-function useIncludeOutside(): [boolean, (v: boolean) => void] {
-  const [value, setValue] = useState(() => {
+/** Per-device preference: categories outside the allocation left out of the net worth figure. */
+function useHiddenCategories(): [Set<string>, (id: string, hide: boolean) => void] {
+  const [hidden, setHidden] = useState<Set<string>>(() => {
     try {
-      return localStorage.getItem(VIEW_KEY) !== 'false';
+      const raw = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]') as unknown;
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []);
     } catch {
-      return true;
+      return new Set();
     }
   });
-  const set = (v: boolean) => {
-    setValue(v);
-    try {
-      localStorage.setItem(VIEW_KEY, String(v));
-    } catch {
-      /* the choice simply resets next visit */
-    }
+  const toggle = (id: string, hide: boolean) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (hide) next.add(id);
+      else next.delete(id);
+      try {
+        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next]));
+      } catch {
+        /* the choice simply resets next visit */
+      }
+      return next;
+    });
   };
-  return [value, set];
+  return [hidden, toggle];
 }
+
+const listNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '');
 
 export function ExampleNote() {
   const { data, dispatch, notify } = useStore();
@@ -64,13 +72,19 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
   const { data, fmt } = useStore();
   const [range, setRange] = useRange();
   const full = totals(data.holdings);
-  const { base, outside, counts, anyExcluded } = allocationBase(data);
-  const [includeOutside, setIncludeOutside] = useIncludeOutside();
-  const excluding = anyExcluded && !includeOutside;
+  const { base, counts, anyExcluded } = allocationBase(data);
+  // Each category outside the allocation can be left out of the net worth figure on its own.
+  const outsideCats = data.categories.filter((c) => !inAllocation(c));
+  const [hidden, toggleHidden] = useHiddenCategories();
+  const hiddenCats = outsideCats.filter((c) => hidden.has(c.id));
+  const hiddenIds = new Set(hiddenCats.map((c) => c.id));
+  const leftOut = sum(data.holdings.filter((h) => h.kind === 'asset' && h.categoryId !== null && hiddenIds.has(h.categoryId)).map((h) => h.value));
+  const excluding = hiddenCats.length > 0;
+  const namesText = listNames(hiddenCats.map((c) => c.name));
   // Debts always count in full: they are not tied to any category.
-  const t = excluding ? { totalAssets: base, totalDebts: full.totalDebts, netWorth: round2(base - full.totalDebts) } : full;
-  const outsideNames = data.categories.filter((c) => !inAllocation(c)).map((c) => c.name);
-  const namesText = outsideNames.length > 1 ? `${outsideNames.slice(0, -1).join(', ')} and ${outsideNames[outsideNames.length - 1]}` : outsideNames[0];
+  const t = excluding
+    ? { totalAssets: round2(full.totalAssets - leftOut), totalDebts: full.totalDebts, netWorth: round2(full.netWorth - leftOut) }
+    : full;
 
   const last = data.snapshots[data.snapshots.length - 1];
   const change = last ? t.netWorth - last.netWorth : 0;
@@ -92,20 +106,25 @@ export function Dashboard({ onSnapshot }: { onSnapshot: () => void }) {
         </dl>
         <p className="since">
           {excluding
-            ? `Leaves out ${fmt.money(outside)} in ${namesText}. Debts are counted in full.`
+            ? `Leaves out ${fmt.money(leftOut)} in ${namesText}. Debts are counted in full.`
             : last
             ? `${fmt.signedMoney(change)}${changePct === null ? '' : ` (${change < 0 ? '−' : '+'}${Math.abs(changePct).toFixed(1)}%)`} since the snapshot of ${fmtDate(last.takenAt)}`
             : 'No snapshots saved yet. Take one to mark this moment.'}
         </p>
         {anyExcluded && (
-          <div className="summary-toggle">
-            <Checkbox label={`Include ${namesText}`} checked={includeOutside} onChange={setIncludeOutside} />
-          </div>
+          <fieldset className="summary-toggle">
+            <legend>Include in net worth</legend>
+            <div className="summary-toggle-options">
+              {outsideCats.map((c) => (
+                <Checkbox key={c.id} label={c.name} checked={!hidden.has(c.id)} onChange={(include) => toggleHidden(c.id, !include)} />
+              ))}
+            </div>
+          </fieldset>
         )}
         <button className="btn btn-primary summary-snapshot" type="button" onClick={onSnapshot}>Take snapshot</button>
       </section>
 
-      <HoldingsSection hideOutside={excluding} />
+      <HoldingsSection hiddenCategoryIds={hiddenIds} />
 
       <section className="section" aria-labelledby="growth-heading">
         <div className="section-head">

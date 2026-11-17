@@ -95,6 +95,8 @@ a { color: inherit; }
 .totals dd { font-weight: 500; }
 .since { margin-top: 8px; color: var(--text-2); }
 .summary-toggle { margin-top: 20px; }
+.summary-toggle legend { font-size: 16px; font-weight: 500; color: var(--text-2); margin-bottom: 10px; }
+.summary-toggle-options { display: flex; flex-wrap: wrap; gap: 12px 32px; }
 
 /* Sections */
 .section { margin-top: var(--gap-section); }

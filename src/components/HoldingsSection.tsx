@@ -12,7 +12,7 @@ type Show = 'all' | 'asset' | 'debt';
 const ALL = '__all__';
 const NONE = '__none__';
 
-export function HoldingsSection({ hideOutside = false }: { hideOutside?: boolean }) {
+export function HoldingsSection({ hiddenCategoryIds }: { hiddenCategoryIds?: Set<string> }) {
   const { data, fmt } = useStore();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState(ALL);
@@ -27,7 +27,7 @@ export function HoldingsSection({ hideOutside = false }: { hideOutside?: boolean
   const q = search.trim().toLowerCase();
   const matches = (h: Holding) => {
     if (show !== 'all' && h.kind !== show) return false;
-    if (hideOutside && h.kind === 'asset' && !counts(h)) return false;
+    if (h.kind === 'asset' && h.categoryId !== null && hiddenCategoryIds?.has(h.categoryId)) return false;
     if (category !== ALL) {
       if (h.kind !== 'asset') return false;
       const id = h.categoryId && catName.has(h.categoryId) ? h.categoryId : NONE;

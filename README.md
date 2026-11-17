@@ -38,7 +38,7 @@ npm run preview
 ## How the numbers work
 
 - Net worth = total assets minus total debts.
-- Allocation percentages use total assets before debts, minus any category set outside the allocation (untick **Count in allocation** for things like a retirement account, a car or a rental deposit). Those still count fully in total assets and net worth. Untick **Include ...** under the net worth figure to see net worth without them; debts always count in full. The choice is remembered per device. Example: assets of 100,000 and debts of 12,500 give a net worth of 87,500, and an asset worth 30,000 is 30.0% of assets.
+- Allocation percentages use total assets before debts, minus any category set outside the allocation (untick **Count in allocation** for things like a retirement account, a car or a rental deposit). Those still count fully in total assets and net worth. Under the net worth figure, **Include in net worth** has one checkbox per such category: untick any of them to see net worth without it. Debts always count in full. The choices are remembered per device. Example: assets of 100,000 and debts of 12,500 give a net worth of 87,500, and an asset worth 30,000 is 30.0% of assets.
 - Difference to target = actual % minus target %. Amount vs target = category value minus (target % x total assets).
 - Amounts are added in whole cents, so totals never drift.
 - Changing the currency changes the label only. No amounts are converted.

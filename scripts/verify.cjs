@@ -71,18 +71,36 @@ async function functional(browser) {
   check('a holding outside the allocation is marked, not given a share', carShare === 'Outside allocation' && (await text(page, '.holdings thead')).includes('% of allocation'), carShare);
   const order = await page.locator('.holdings tbody .row .c-name .name').allInnerTexts();
   check('holdings outside the allocation are listed last among assets', order.slice(0, 8).join('|') === 'Global index fund|Bitcoin|S&P 500 fund|Savings account|Angel investments|Altcoins|Checking account|Car', order.join('|'));
-  await page.getByRole('checkbox', { name: 'Include Other' }).uncheck();
-  const excl = (await text(page, '.summary')).replace(/\s+/g, ' ');
-  check('summary can leave out categories outside the allocation', excl.includes('Net worth without Other $1,064,650') && excl.includes('Total assets $1,082,200') && excl.includes('Leaves out $22,000 in Other'), excl.slice(0, 160));
-  check('their holdings are hidden while left out', !(await page.locator('.holdings .row .name').allInnerTexts()).includes('Car') && (await text(page, '.holdings .group')).includes('7 of 8 holdings'));
+  // Put High Risk outside the allocation too, so there are 2 categories to switch separately.
+  await go(page, '#/allocation');
+  await page.getByRole('button', { name: 'Edit categories and targets' }).click();
+  const hr = page.locator('.cat-row').filter({ has: page.locator('input[value="High Risk"]') });
+  await hr.getByRole('checkbox', { name: 'Count in allocation' }).uncheck();
+  await page.locator('.cat-row').filter({ has: page.locator('input[value="Cash"]') }).getByLabel('Target %').fill('25');
+  await page.getByRole('button', { name: 'Save categories' }).click();
+  await go(page, '#/');
+  const include = page.getByRole('group', { name: 'Include in net worth' });
+  check('one checkbox per category outside the allocation', (await include.getByRole('checkbox').count()) === 2 && (await include.getByRole('checkbox', { name: 'Other' }).isChecked()) && (await include.getByRole('checkbox', { name: 'High Risk' }).isChecked()));
+  await include.getByRole('checkbox', { name: 'High Risk' }).uncheck();
+  // 1,086,650 - (60,000 + 41,900) = 984,750
+  const one = (await text(page, '.summary')).replace(/\s+/g, ' ');
+  check('leaving out one category changes only its part', one.includes('Net worth without High Risk $984,750') && one.includes('Total assets $1,002,300') && one.includes('Leaves out $101,900 in High Risk'), one.slice(0, 170));
+  const names = await page.locator('.holdings .row .name').allInnerTexts();
+  check('only that category\'s holdings are hidden', !names.includes('Angel investments') && !names.includes('Altcoins') && names.includes('Car'));
+  await include.getByRole('checkbox', { name: 'Other' }).uncheck();
+  // 984,750 - 22,000 = 962,750
+  const two = (await text(page, '.summary')).replace(/\s+/g, ' ');
+  check('leaving out both lists both', two.includes('Net worth without High Risk and Other $962,750') && two.includes('Leaves out $123,900 in High Risk and Other'), two.slice(0, 170));
   await page.reload();
-  check('the choice is remembered on this device', !(await page.getByRole('checkbox', { name: 'Include Other' }).isChecked()) && (await text(page, '.net-worth')) === '$1,064,650');
-  await page.getByRole('checkbox', { name: 'Include Other' }).check();
-  check('ticking it again restores the full figures', (await text(page, '.net-worth')) === '$1,086,650');
+  check('the choices are remembered on this device', (await text(page, '.net-worth')) === '$962,750' && !(await page.getByRole('group', { name: 'Include in net worth' }).getByRole('checkbox', { name: 'High Risk' }).isChecked()));
+  await page.getByRole('group', { name: 'Include in net worth' }).getByRole('checkbox', { name: 'High Risk' }).check();
+  await page.getByRole('group', { name: 'Include in net worth' }).getByRole('checkbox', { name: 'Other' }).check();
+  check('ticking both again restores the full figures', (await text(page, '.net-worth')) === '$1,086,650');
+  await page.screenshot({ path: path.join(OUT, 'include-in-net-worth-1440.png') });
   await go(page, '#/allocation');
   const lead = await text(page, '.page .lead');
-  check('allocation is based on allocated assets only', lead.includes('Shares are calculated on allocated assets: $1,082,200. Another $22,000 sits in categories outside the allocation'), lead);
-  check('categories outside the allocation are listed separately', (await text(page, '.outside-table tbody')).replace(/\s+/g, ' ') === 'Other 1 $22,000 2.0%');
+  check('allocation is based on allocated assets only', lead.includes('Shares are calculated on allocated assets: $980,300. Another $123,900 sits in categories outside the allocation'), lead);
+  check('categories outside the allocation are listed separately', (await text(page, '.outside-table tbody')).replace(/\s+/g, ' ') === 'High Risk 2 $101,900 9.2% Other 1 $22,000 2.0%');
   await go(page, '#/');
 
   // Filters and search
