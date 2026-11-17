@@ -94,6 +94,7 @@ a { color: inherit; }
 .totals dt { color: var(--text-3); }
 .totals dd { font-weight: 500; }
 .since { margin-top: 8px; color: var(--text-2); }
+.summary-toggle { margin-top: 20px; }
 
 /* Sections */
 .section { margin-top: var(--gap-section); }

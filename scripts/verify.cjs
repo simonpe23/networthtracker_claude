@@ -71,6 +71,14 @@ async function functional(browser) {
   check('a holding outside the allocation is marked, not given a share', carShare === 'Outside allocation' && (await text(page, '.holdings thead')).includes('% of allocation'), carShare);
   const order = await page.locator('.holdings tbody .row .c-name .name').allInnerTexts();
   check('holdings outside the allocation are listed last among assets', order.slice(0, 8).join('|') === 'Global index fund|Bitcoin|S&P 500 fund|Savings account|Angel investments|Altcoins|Checking account|Car', order.join('|'));
+  await page.getByRole('checkbox', { name: 'Include Other' }).uncheck();
+  const excl = (await text(page, '.summary')).replace(/\s+/g, ' ');
+  check('summary can leave out categories outside the allocation', excl.includes('Net worth without Other $1,064,650') && excl.includes('Total assets $1,082,200') && excl.includes('Leaves out $22,000 in Other'), excl.slice(0, 160));
+  check('their holdings are hidden while left out', !(await page.locator('.holdings .row .name').allInnerTexts()).includes('Car') && (await text(page, '.holdings .group')).includes('7 of 8 holdings'));
+  await page.reload();
+  check('the choice is remembered on this device', !(await page.getByRole('checkbox', { name: 'Include Other' }).isChecked()) && (await text(page, '.net-worth')) === '$1,064,650');
+  await page.getByRole('checkbox', { name: 'Include Other' }).check();
+  check('ticking it again restores the full figures', (await text(page, '.net-worth')) === '$1,086,650');
   await go(page, '#/allocation');
   const lead = await text(page, '.page .lead');
   check('allocation is based on allocated assets only', lead.includes('Shares are calculated on allocated assets: $1,082,200. Another $22,000 sits in categories outside the allocation'), lead);
