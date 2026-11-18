@@ -1,13 +1,27 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
-export function Dialog({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+interface DialogProps {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+  /** Start at the title instead of the first button, for dialogs that are mainly read. */
+  focusTitle?: boolean;
+}
+
+export function Dialog({ title, onClose, children, wide, focusTitle }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const id = useId();
   useEffect(() => {
     const d = ref.current!;
     if (!d.open) d.showModal();
+    if (focusTitle) {
+      heading.current?.focus();
+      d.scrollTop = 0;
+    }
     return () => d.close();
-  }, []);
+  }, [focusTitle]);
   return (
     <dialog
       ref={ref}
@@ -22,7 +36,7 @@ export function Dialog({ title, onClose, children, wide }: { title: string; onCl
       }}
     >
       <div className="dialog-body">
-        <h2 id={id} className="sub-heading">{title}</h2>
+        <h2 id={id} ref={heading} className="sub-heading" tabIndex={focusTitle ? -1 : undefined}>{title}</h2>
         {children}
       </div>
     </dialog>

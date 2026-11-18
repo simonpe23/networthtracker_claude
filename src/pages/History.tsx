@@ -1,48 +1,91 @@
 import { useState } from 'react';
-import type { Snapshot } from '../types';
+import type { Snapshot, SnapshotHolding } from '../types';
+import { inAllocation, sum } from '../lib/calc';
 import { adjustSnapshot, makeExclusion, snapshotHoldingExcluded, type Exclusion } from '../lib/exclude';
 import { fmtDate, fmtDateTime, pct } from '../lib/format';
 import { useHiddenCategories } from '../lib/hidden';
 import { useStore } from '../state';
 import { deletedLabel, HoldingCharts, METRIC_LABEL, PortfolioChart, useRange, type Metric } from '../components/charts';
 import { Select } from '../components/Select';
-import { Confirm } from '../components/ui';
+import { Confirm, Dialog } from '../components/ui';
 
 const PORTFOLIO = '__portfolio__';
 
-function SnapshotDetail({ snapshot, ex }: { snapshot: Snapshot; ex: Exclusion }) {
-  const { fmt } = useStore();
-  if (!snapshot.holdings) {
-    return <p className="panel">This older snapshot recorded totals only. No holdings were saved with it, so none are shown.</p>;
-  }
-  const rows = [...snapshot.holdings].sort((a, b) => (a.kind === b.kind ? b.value - a.value : a.kind === 'asset' ? -1 : 1));
+/**
+ * A saved snapshot shown like the Holdings table: every holding exactly as it was saved,
+ * with the category it had at that moment and its value. Nothing here follows later edits.
+ */
+function SnapshotDialog({ snapshot, ex, onClose }: { snapshot: Snapshot; ex: Exclusion; onClose: () => void }) {
+  const { data, fmt } = useStore();
+  const when = fmtDateTime(snapshot.takenAt);
+  const shown = adjustSnapshot(snapshot, ex) ?? snapshot;
+  const opt = (n: number | null) => (n === null ? 'Not recorded' : fmt.money(n));
+
+  // Same order as the Holdings table: largest first, categories outside the allocation last.
+  const outside = new Set(data.categories.filter((c) => !inAllocation(c)).flatMap((c) => [c.id, c.name]));
+  const isOutside = (h: SnapshotHolding) => (h.categoryId ? outside.has(h.categoryId) : h.category !== null && outside.has(h.category));
+  const rows = snapshot.holdings ?? [];
+  const assets = rows.filter((h) => h.kind === 'asset').sort((a, b) => Number(isOutside(a)) - Number(isOutside(b)) || b.value - a.value);
+  const debts = rows.filter((h) => h.kind === 'debt').sort((a, b) => b.value - a.value);
+  const excluded = sum(assets.filter((h) => snapshotHoldingExcluded(h, ex)).map((h) => h.value));
+  const count = (n: number) => `${n} ${n === 1 ? 'holding' : 'holdings'}`;
+
+  const row = (h: SnapshotHolding) => (
+    <tr key={h.holdingId} className={snapshotHoldingExcluded(h, ex) ? 'row is-left-out' : 'row'}>
+      <th scope="row" className="c-name">
+        <span className="name">{h.name}</span>
+        {h.institution && <span className="inst">{h.institution}</span>}
+      </th>
+      <td className="c-cat">{h.kind === 'debt' ? 'Debt' : h.category ?? 'Uncategorised'}</td>
+      <td className="num c-value">{fmt.money(h.kind === 'debt' ? -h.value : h.value)}</td>
+    </tr>
+  );
+
   return (
-    <div className="panel">
-      <p className="hint">Holdings exactly as they were on {fmtDateTime(snapshot.takenAt)}.</p>
-      <table className="data-table mini-table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Category</th>
-            <th scope="col" className="num">Value</th>
-            <th scope="col" className="num">% of assets</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((h) => (
-            <tr key={h.holdingId} className={snapshotHoldingExcluded(h, ex) ? 'is-left-out' : undefined}>
-              <th scope="row" className="m-name">
-                {h.name}
-                {h.institution && <span className="muted"> ({h.institution})</span>}
-              </th>
-              <td className="m-cat">{h.kind === 'debt' ? 'Debt' : h.category ?? 'Uncategorised'}</td>
-              <td className="num m-value">{fmt.money(h.kind === 'debt' ? -h.value : h.value)}</td>
-              <td className="num m-pct">{h.pct === null ? <span className="sr-only">Not counted in allocation</span> : pct(h.pct)}</td>
+    <Dialog title={`Snapshot of ${when}`} onClose={onClose} wide focusTitle>
+      <dl className="snap-totals">
+        <div><dt>Net worth</dt><dd>{fmt.money(shown.netWorth)}</dd></div>
+        <div><dt>Total assets</dt><dd>{opt(shown.totalAssets)}</dd></div>
+        <div><dt>Total debts</dt><dd>{opt(snapshot.totalDebts)}</dd></div>
+      </dl>
+      {!snapshot.holdings ? (
+        <p className="dialog-text">This older snapshot recorded totals only. No holdings were saved with it, so none are shown.</p>
+      ) : (
+        <table className="holdings snap-holdings">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Category</th>
+              <th scope="col" className="num">Value</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {assets.length > 0 && (
+              <tr className="group">
+                <th scope="rowgroup" colSpan={2}>
+                  Assets <span className="count">{count(assets.length)}</span>
+                  {excluded > 0 && <span className="count">{fmt.money(excluded)} excluded</span>}
+                </th>
+                <td className="num">{fmt.money(sum(assets.filter((h) => !snapshotHoldingExcluded(h, ex)).map((h) => h.value)))}</td>
+              </tr>
+            )}
+            {assets.map(row)}
+            {debts.length > 0 && (
+              <tr className="group">
+                <th scope="rowgroup" colSpan={2}>
+                  Debts <span className="count">{count(debts.length)}</span>
+                </th>
+                <td className="num">{fmt.money(-sum(debts.map((h) => h.value)))}</td>
+              </tr>
+            )}
+            {debts.map(row)}
+          </tbody>
+        </table>
+      )}
+      <div className="form-actions">
+        <button type="button" className="btn btn-primary" onClick={onClose}>Close</button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -63,6 +106,7 @@ function SnapshotList() {
   const [toDelete, setToDelete] = useState<Snapshot | null>(null);
   const snapshots = [...data.snapshots].reverse();
   const opt = (n: number | null) => (n === null ? 'Not recorded' : fmt.money(n));
+  const opened = data.snapshots.find((s) => s.id === open) ?? null;
 
   if (snapshots.length === 0) {
     return <p className="empty">No snapshots saved yet. Use Take snapshot to keep a permanent copy of your portfolio as it is now.</p>;
@@ -80,32 +124,27 @@ function SnapshotList() {
           </tr>
         </thead>
         <tbody>
-          {snapshots.flatMap((s) => {
-            const isOpen = open === s.id;
+          {snapshots.map((s) => {
             const when = fmtDateTime(s.takenAt);
             const shown = adjustSnapshot(s, ex) ?? s;
-            return [
-              <tr key={s.id} className={isOpen ? 'is-open' : undefined}>
+            return (
+              <tr key={s.id}>
                 <th scope="row">{when}</th>
                 <td className="num strong" data-label="Net worth">{fmt.money(shown.netWorth)}</td>
                 <td className="num" data-label="Total assets">{opt(shown.totalAssets)}</td>
                 <td className="num" data-label="Total debts">{opt(s.totalDebts)}</td>
                 <td className="row-actions">
-                  <button type="button" className="link" aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'View'} holdings in snapshot of ${when}`} onClick={() => setOpen(isOpen ? null : s.id)}>
-                    {isOpen ? 'Hide holdings' : 'View holdings'}
+                  <button type="button" className="link" aria-haspopup="dialog" aria-label={`View holdings in snapshot of ${when}`} onClick={() => setOpen(s.id)}>
+                    View holdings
                   </button>
                   <button type="button" className="link" aria-label={`Delete snapshot of ${when}`} onClick={() => setToDelete(s)}>Delete</button>
                 </td>
-              </tr>,
-              isOpen && (
-                <tr key={`${s.id}-detail`} className="detail-row">
-                  <td colSpan={5}><SnapshotDetail snapshot={s} ex={ex} /></td>
-                </tr>
-              ),
-            ];
+              </tr>
+            );
           })}
         </tbody>
       </table>
+      {opened && <SnapshotDialog snapshot={opened} ex={ex} onClose={() => setOpen(null)} />}
       {toDelete && (
         <Confirm
           title="Delete this snapshot?"

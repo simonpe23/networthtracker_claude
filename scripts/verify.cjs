@@ -85,7 +85,7 @@ async function functional(browser) {
   await cb('High Risk').first().uncheck();
   // 1,086,650 - (60,000 + 41,900) = 984,750
   const one = (await text(page, '.summary')).replace(/\s+/g, ' ');
-  check('leaving out one category changes only its part', one.includes('Net worth $984,750') && one.includes('Total assets $1,002,300') && one.includes('+$7,939 (+0.8%) since the snapshot of 1 Nov 2026') && (await text(page, '.holdings .group')).includes('$101,900 excluded'), one.slice(0, 170));
+  check('leaving out one category changes only its part', one.includes('Net worth $984,750') && one.includes('Total assets $1,002,300') && /\+\$7,939 \(\+0\.8%\) since the snapshot of \d{1,2} \w{3,4} \d{4}/.test(one) && (await text(page, '.holdings .group')).includes('$101,900 excluded'), one.slice(0, 170));
   check('both holdings of that category follow, and stay listed', (await cb('High Risk').nth(1).isChecked()) === false && (await page.locator('.holdings .is-left-out').count()) === 2);
   check('the assets total matches the summary', (await text(page, '.holdings .group')).includes('$1,002,300'));
   await cb('Other').uncheck();
@@ -105,7 +105,10 @@ async function functional(browser) {
   check('a quiet note says what is excluded', (await text(page, '.page')).includes('Totals exclude High Risk and Other, as on the Holdings page.'));
   check('the chart says what it excludes', (await text(page, '.chart-meta')).includes('Excludes High Risk and Other'));
   await page.getByRole('button', { name: /^View holdings/ }).first().click();
-  check('the expanded snapshot still lists every holding, excluded ones greyed', (await page.locator('.detail-row tbody tr').count()) === 10 && (await page.locator('.detail-row .is-left-out').count()) === 3);
+  const pop = page.getByRole('dialog', { name: /^Snapshot of / });
+  check('the snapshot popup lists every holding, excluded ones greyed', (await pop.locator('tbody .row').count()) === 10 && (await pop.locator('.is-left-out').count()) === 3);
+  check('the popup Assets row notes the excluded amount', (await pop.locator('.group').first().innerText()).includes('$124,409 excluded'), await pop.locator('.group').first().innerText());
+  await pop.getByRole('button', { name: 'Close' }).click();
   await go(page, '#/');
   await cb('High Risk').first().check();
   await cb('Other').check();
@@ -244,8 +247,14 @@ async function functional(browser) {
   await go(page, '#/history');
   check('history lists both snapshots', (await page.locator('.snapshots tbody tr').count()) === 2);
   await page.getByRole('button', { name: /^View holdings/ }).nth(1).click();
-  const detail = (await text(page, '.detail-row')).replace(/\s+/g, ' ');
-  check('expanded snapshot shows the original holdings', detail.includes('World fund Index Funds $50,000 50.0%') && detail.includes('Savings (Marcus) Cash $20,000 20.0%') && detail.includes('Loan Debt −$12,500'), detail);
+  const popup = page.getByRole('dialog', { name: /^Snapshot of / });
+  const detail = (await popup.innerText()).replace(/\s+/g, ' ');
+  // Since this snapshot, Savings was renamed Emergency fund, revalued to 25,000 and moved to Bitcoin,
+  // and World fund was deleted. The popup must still show them exactly as saved.
+  check('snapshot popup shows holdings exactly as saved, with the category they had then', detail.includes('Net worth $87,500 Total assets $100,000 Total debts $12,500') && detail.includes('World fund Index Funds $50,000') && detail.includes('Savings Marcus Cash $20,000') && detail.includes('Bitcoin Bitcoin $30,000') && detail.includes('Loan Debt −$12,500') && !detail.includes('Emergency fund'), detail);
+  check('the popup lists dollar amounts, no percentages', !detail.includes('%'));
+  await page.keyboard.press('Escape');
+  check('Escape closes the popup', (await page.getByRole('dialog').count()) === 0);
   check('portfolio chart drawn with a line and 2 snapshot dots', (await page.locator('.chart svg circle[fill="#ffc61a"]').count()) === 2 && (await page.locator('.chart svg').count()) === 1);
   const chartColours = await page.evaluate(() => {
     const dot = document.querySelector('.chart svg circle[fill="#ffc61a"]');
@@ -317,7 +326,8 @@ async function functional(browser) {
   await page.getByRole('dialog').getByRole('button', { name: 'Replace with backup' }).click();
   await go(page, '#/history');
   await page.getByRole('button', { name: /^View holdings/ }).click();
-  check('total-only snapshot kept without invented holdings', (await text(page, '.snapshots tbody')).includes('Not recorded') && (await text(page, '.detail-row')).includes('recorded totals only'));
+  check('total-only snapshot kept without invented holdings', (await text(page, '.snapshots tbody')).includes('Not recorded') && (await page.getByRole('dialog').innerText()).includes('recorded totals only'));
+  await page.keyboard.press('Escape');
   const d = await stored(page);
   check('no asset history invented for the old snapshot', d.snapshots[0].holdings === null && d.daily.length === 1 && d.daily[0].date !== '2024-03-01');
 
@@ -460,9 +470,15 @@ async function visual(browser, width, height) {
   // History
   await go(page, '#/history');
   await page.getByRole('button', { name: /^View holdings/ }).first().click();
-  await runAudit(page, tag('history with expanded snapshot'));
-  const panel = await page.evaluate(() => getComputedStyle(document.querySelector('.detail-row .panel')).backgroundColor);
-  check(tag('expanded snapshot uses the #ecebe8 surface'), panel === 'rgb(236, 235, 232)');
+  await runAudit(page, tag('snapshot popup'));
+  const popBox = await page.evaluate(() => {
+    const d = document.querySelector('dialog');
+    const r = d.getBoundingClientRect();
+    return { bg: getComputedStyle(d).backgroundColor, fits: r.left >= 0 && r.right <= innerWidth };
+  });
+  check(tag('snapshot popup uses the #ecebe8 surface and fits the screen'), popBox.bg === 'rgb(236, 235, 232)' && popBox.fits);
+  await shot('snapshot-popup', false);
+  await page.keyboard.press('Escape');
   await shot('history');
   await page.getByRole('group', { name: 'Date range' }).getByRole('button', { name: 'Custom' }).click();
   await page.getByRole('button', { name: /^From / }).click();
