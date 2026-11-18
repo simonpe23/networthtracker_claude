@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fmtDate, fmtMonth, fmtShortDate, fmtTime } from '../lib/format';
 
 export interface ChartPoint {
-  t: number; // time in milliseconds
+  t: number; // position on the time axis, in milliseconds
   v: number;
+  /** When it really happened, if that differs from its position (snapshots sit on their day). */
+  at?: number;
 }
 
 interface Props {
@@ -100,7 +102,20 @@ export function LineChart({ label, line, dots, formatValue, formatAxis }: Props)
   const axis = formatAxis(yTicks);
 
   const xCount = Math.max(2, Math.min(6, Math.floor(plotW / 170)));
-  const xTicks = Array.from({ length: xCount }, (_, i) => t0 + ((t1 - t0) * i) / (xCount - 1));
+  // Short ranges get one tick per day, at midday where that day's points sit, so no date repeats.
+  let xTicks: number[];
+  if ((t1 - t0) / DAY <= 21) {
+    const first = new Date(t0 - DAY / 2);
+    first.setHours(12, 0, 0, 0);
+    const days: number[] = [];
+    for (const d = first; d.getTime() <= t1 + DAY / 2; d.setDate(d.getDate() + 1)) {
+      if (d.getTime() >= t0 - DAY / 4 && d.getTime() <= t1 + DAY / 4) days.push(d.getTime());
+    }
+    const step = Math.max(1, Math.ceil(days.length / xCount));
+    xTicks = days.filter((_, i) => i % step === 0);
+  } else {
+    xTicks = Array.from({ length: xCount }, (_, i) => t0 + ((t1 - t0) * i) / (xCount - 1));
+  }
   const xLabel = t1 - t0 > 120 * DAY ? fmtMonth : fmtShortDate;
 
   const path = line.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
@@ -132,7 +147,7 @@ export function LineChart({ label, line, dots, formatValue, formatAxis }: Props)
   };
 
   const describe = (p: (typeof points)[number]) => {
-    const d = new Date(p.t);
+    const d = new Date(p.at ?? p.t);
     return p.snapshot
       ? { when: `${fmtDate(d)}, ${fmtTime(d)}`, kind: 'Saved snapshot' }
       : { when: fmtDate(d), kind: 'Daily update' };
@@ -176,13 +191,13 @@ export function LineChart({ label, line, dots, formatValue, formatAxis }: Props)
               </text>
             </g>
           ))}
-          {xTicks.map((t, i) => (
+          {xTicks.map((t) => (
             <g key={t}>
               <line x1={x(t)} x2={x(t)} y1={m.top + plotH} y2={m.top + plotH + 6} stroke={INK} strokeWidth="1" />
               <text
                 x={x(t)}
                 y={m.top + plotH + 28}
-                textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
+                textAnchor={x(t) - m.left < 44 ? 'start' : width - m.right - x(t) < 44 ? 'end' : 'middle'}
                 className="axis-text"
               >
                 {xLabel(new Date(t))}

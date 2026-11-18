@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { AppData } from '../types';
 import { round2 } from '../lib/calc';
 import { adjustSnapshot, dailyExcluder, makeExclusion, type Exclusion } from '../lib/exclude';
-import { fmtDate, parseLocalDate, pct } from '../lib/format';
+import { fmtDate, localDate, parseLocalDate, pct } from '../lib/format';
 import { useHiddenCategories } from '../lib/hidden';
 import { holdingSeries } from '../lib/store';
 import { useStore } from '../state';
@@ -14,9 +14,30 @@ export const METRIC_LABEL: Record<Metric, string> = { netWorth: 'Net worth', tot
 
 const noon = (date: string) => parseLocalDate(date).getTime();
 
+/**
+ * Where each snapshot sits on the time axis: on its own day, at midday, like that day's
+ * daily point, so a snapshot that matches the day's balance lands on the line. Several
+ * snapshots on one day are spread a little around midday, in the order they were taken.
+ */
+export function snapshotPositions(snapshots: { id: string; takenAt: string }[]): Map<string, number> {
+  const byDay = new Map<string, { id: string; at: number }[]>();
+  for (const s of snapshots) {
+    const at = new Date(s.takenAt).getTime();
+    const day = localDate(new Date(at));
+    byDay.set(day, [...(byDay.get(day) ?? []), { id: s.id, at }]);
+  }
+  const out = new Map<string, number>();
+  for (const [day, list] of byDay) {
+    list.sort((a, b) => a.at - b.at);
+    list.forEach((s, i) => out.set(s.id, noon(day) + (i - (list.length - 1) / 2) * 2 * 3600000));
+  }
+  return out;
+}
+
 export function portfolioSeries(data: AppData, metric: Metric, ex?: Exclusion): { line: ChartPoint[]; dots: ChartPoint[] } {
   const exclusion = ex ?? makeExclusion(data, new Set());
   const minus = metric === 'totalDebts' ? () => 0 : dailyExcluder(data, exclusion);
+  const pos = snapshotPositions(data.snapshots);
   return {
     line: data.daily.map((d) => ({ t: noon(d.date), v: round2(d[metric] - minus(d)) })),
     // Older total-only snapshots may lack assets or debts, and cannot be split by category.
@@ -24,7 +45,7 @@ export function portfolioSeries(data: AppData, metric: Metric, ex?: Exclusion): 
     dots: data.snapshots.flatMap((s) => {
       const a = adjustSnapshot(s, exclusion);
       const v = a?.[metric];
-      return v === null || v === undefined ? [] : [{ t: new Date(s.takenAt).getTime(), v }];
+      return v === null || v === undefined ? [] : [{ t: pos.get(s.id)!, at: new Date(s.takenAt).getTime(), v }];
     }),
   };
 }
@@ -76,14 +97,13 @@ export function HoldingCharts({ id, range, onRange }: { id: string; range: Range
   const { data } = useStore();
   const kind = data.holdings.find((h) => h.id === id)?.kind ?? data.removedHoldings.find((h) => h.id === id)?.kind ?? 'asset';
   const series = useMemo(() => holdingSeries(data, id), [data, id]);
-  const snaps = useMemo(
-    () =>
-      data.snapshots.flatMap((s) => {
-        const h = s.holdings?.find((x) => x.holdingId === id);
-        return h ? [{ t: new Date(s.takenAt).getTime(), value: h.value, pct: h.pct }] : [];
-      }),
-    [data, id],
-  );
+  const snaps = useMemo(() => {
+    const pos = snapshotPositions(data.snapshots);
+    return data.snapshots.flatMap((s) => {
+      const h = s.holdings?.find((x) => x.holdingId === id);
+      return h ? [{ t: pos.get(s.id)!, at: new Date(s.takenAt).getTime(), value: h.value, pct: h.pct }] : [];
+    });
+  }, [data, id]);
   return (
     <>
       <RangeControl range={range} onChange={onRange} earliest={series[0]?.date} />
@@ -91,7 +111,7 @@ export function HoldingCharts({ id, range, onRange }: { id: string; range: Range
         title={kind === 'asset' ? 'Value over time' : 'Amount owed over time'}
         label={kind === 'asset' ? 'Value' : 'Amount owed'}
         line={series.map((p) => ({ t: noon(p.date), v: p.value }))}
-        dots={snaps.map((s) => ({ t: s.t, v: s.value }))}
+        dots={snaps.map((s) => ({ t: s.t, at: s.at, v: s.value }))}
         range={range}
         money
       />
@@ -100,7 +120,7 @@ export function HoldingCharts({ id, range, onRange }: { id: string; range: Range
           title="Share of total assets over time"
           label="Share of total assets"
           line={series.flatMap((p) => (p.pct === null ? [] : [{ t: noon(p.date), v: p.pct }]))}
-          dots={snaps.flatMap((s) => (s.pct === null ? [] : [{ t: s.t, v: s.pct }]))}
+          dots={snaps.flatMap((s) => (s.pct === null ? [] : [{ t: s.t, at: s.at, v: s.pct }]))}
           range={range}
           money={false}
         />

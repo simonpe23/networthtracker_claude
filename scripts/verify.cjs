@@ -371,6 +371,54 @@ async function functional(browser) {
   await ctx.close();
 }
 
+// A few days of history where each snapshot matches its day's balance: the dots must sit on
+// the line, and a short date range must not repeat dates on the axis.
+async function shortHistory(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(BASE);
+  await page.evaluate((k) => {
+    const day = (n, h = 12, m = 0) => { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(h, m, 0, 0); return d; };
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const snap = (id, d, v) => ({ id, takenAt: d.toISOString(), netWorth: v, totalAssets: v, totalDebts: 0, holdings: [{ holdingId: 'h1', name: 'Savings', institution: '', kind: 'asset', category: 'Cash', categoryId: 'c1', value: v, pct: 100 }] });
+    const data = {
+      app: 'sp-net-worth-tracker', version: 2, currency: 'USD', showCents: false, isExample: false,
+      categories: [{ id: 'c1', name: 'Cash', target: null, inAllocation: true }],
+      holdings: [{ id: 'h1', kind: 'asset', name: 'Savings', institution: '', notes: '', categoryId: 'c1', value: 102521, createdAt: day(2).toISOString(), updatedAt: day(0).toISOString() }],
+      removedHoldings: [],
+      daily: [[2, 101612], [1, 102042], [0, 102521]].map(([n, v]) => ({ date: iso(day(n)), totalAssets: v, totalDebts: 0, netWorth: v, values: { h1: v } })),
+      snapshots: [snap('s1', day(1, 15, 44), 102042), snap('s2', day(0, 10, 45), 102521)],
+    };
+    localStorage.setItem(k, JSON.stringify(data));
+  }, KEY);
+  await page.goto(BASE + '#/history');
+  await page.reload();
+  await page.evaluate(() => document.fonts.ready);
+  await page.getByRole('group', { name: 'Date range' }).getByRole('button', { name: '1M' }).click();
+  const geo = await page.evaluate(() => {
+    const svg = document.querySelector('.chart svg');
+    const path = svg.querySelector('path');
+    const len = path.getTotalLength();
+    const yAt = (x) => {
+      let lo = 0, hi = len;
+      for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (path.getPointAtLength(mid).x < x) lo = mid; else hi = mid; }
+      return path.getPointAtLength(lo).y;
+    };
+    const dots = [...svg.querySelectorAll('circle[fill="#ffc61a"]')].map((c) => Math.abs(yAt(+c.getAttribute('cx')) - +c.getAttribute('cy')));
+    const texts = [...svg.querySelectorAll('text.axis-text')];
+    const bottom = Math.max(...texts.map((t) => +t.getAttribute('y')));
+    const labels = texts.filter((t) => +t.getAttribute('y') === bottom).map((t) => t.textContent);
+    return { dots, labels };
+  });
+  check('snapshots that match their day sit on the daily line', geo.dots.length === 2 && geo.dots.every((d) => d < 1.5), JSON.stringify(geo.dots));
+  check('a short date range shows each date once', geo.labels.length === 3 && new Set(geo.labels).size === 3, geo.labels.join(' | '));
+  const box = await page.locator('.chart svg circle[fill="#ffc61a"]').first().boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  check('the snapshot tooltip keeps the real time it was saved', /, 15:44$/.test((await text(page, '.tooltip')).split('\n')[1] ?? ''), await text(page, '.tooltip'));
+  await page.screenshot({ path: path.join(OUT, 'history-short-range-1440.png') });
+  await ctx.close();
+}
+
 async function visual(browser, width, height) {
   const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
@@ -510,6 +558,7 @@ async function visual(browser, width, height) {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
   await functional(browser);
+  await shortHistory(browser);
   await visual(browser, 1440, 900);
   await visual(browser, 390, 844);
   await browser.close();
